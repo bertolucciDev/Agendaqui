@@ -1,0 +1,269 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-warm-200;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #111827;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    @apply bg-primary-100 text-primary-900;
+  }
+}
+
+@layer components {
+  /* ─── Buttons ─── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-primary-foreground shadow-sm;
+    @apply hover:bg-primary-600 hover:shadow-md;
+    @apply active:bg-primary-700;
+  }
+
+  .btn-secondary {
+    @apply btn bg-secondary text-secondary-foreground border border-warm-200;
+    @apply hover:bg-warm-50 hover:border-warm-300;
+    @apply active:bg-warm-100;
+  }
+
+  .btn-outline {
+    @apply btn bg-transparent text-foreground border border-warm-200;
+    @apply hover:bg-warm-50 hover:border-warm-300;
+    @apply active:bg-warm-100;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-muted;
+    @apply hover:bg-warm-100 hover:text-foreground;
+    @apply active:bg-warm-200;
+  }
+
+  .btn-destructive {
+    @apply btn bg-destructive text-destructive-foreground shadow-sm;
+    @apply hover:bg-red-600 hover:shadow-md;
+    @apply active:bg-red-700;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  .btn-icon {
+    @apply btn p-2;
+  }
+
+  /* ─── Inputs ─── */
+  .input {
+    @apply block w-full rounded-lg border border-warm-200 bg-white px-3 py-2 text-sm text-foreground transition-colors duration-150;
+    @apply placeholder:text-ink-faint;
+    @apply hover:border-warm-300;
+    @apply focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10;
+    @apply disabled:opacity-50 disabled:bg-warm-50 disabled:cursor-not-allowed;
+  }
+
+  .input-error {
+    @apply border-destructive focus:border-destructive focus:ring-destructive/10;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-ink-muted;
+  }
+
+  .label-required::after {
+    content: ' *';
+    @apply text-destructive;
+  }
+
+  .helper-text {
+    @apply mt-1 text-xs text-ink-muted;
+  }
+
+  .error-text {
+    @apply mt-1 text-xs text-destructive;
+  }
+
+  /* ─── Cards ─── */
+  .card {
+    @apply rounded-xl border border-warm-200 bg-card;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-150;
+    @apply hover:shadow-md hover:border-warm-300;
+  }
+
+  .card-interactive {
+    @apply card-hover cursor-pointer;
+    @apply hover:bg-warm-50;
+  }
+
+  /* ─── Badges ─── */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary-50 text-primary-700;
+  }
+
+  .badge-success {
+    @apply badge bg-success-50 text-green-700;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-50 text-amber-700;
+  }
+
+  .badge-destructive {
+    @apply badge bg-destructive-50 text-red-700;
+  }
+
+  .badge-info {
+    @apply badge bg-info-50 text-blue-700;
+  }
+
+  .badge-neutral {
+    @apply badge bg-warm-100 text-warm-600;
+  }
+
+  /* ─── Layout ─── */
+  .page-header {
+    @apply flex h-14 items-center justify-between border-b border-warm-200 bg-white px-5;
+  }
+
+  .page-content {
+    @apply p-5;
+  }
+
+  .page-title {
+    @apply text-lg font-bold text-foreground font-display;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar-item {
+    @apply flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-muted transition-all duration-150;
+    @apply hover:bg-primary-50 hover:text-primary-700;
+  }
+
+  .sidebar-item-active {
+    @apply sidebar-item bg-primary-50 text-primary-700 font-semibold;
+  }
+
+  /* ─── Empty State ─── */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-center;
+  }
+
+  /* ─── Skeleton ─── */
+  .skeleton {
+    @apply animate-shimmer rounded-lg bg-gradient-to-r from-warm-100 via-warm-50 to-warm-100;
+    background-size: 200% 100%;
+  }
+
+  /* ─── Stat Card ─── */
+  .stat-card {
+    @apply card p-5 transition-all duration-150;
+    @apply hover:shadow-md;
+  }
+
+  /* ─── Divider ─── */
+  .divider {
+    @apply border-t border-warm-200;
+  }
+
+  /* ─── Avatar ─── */
+  .avatar {
+    @apply flex shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700;
+  }
+
+  /* ─── Dropdown ─── */
+  .dropdown {
+    @apply absolute right-0 top-full z-10 mt-1 min-w-[10rem] rounded-lg border border-warm-200 bg-white py-1 shadow-lg;
+  }
+
+  .dropdown-item {
+    @apply flex items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors;
+    @apply hover:bg-warm-50;
+  }
+
+  .dropdown-item-destructive {
+    @apply dropdown-item text-destructive;
+    @apply hover:bg-destructive-50;
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: fade-in-up 250ms ease-out both;
+  }
+
+  .animate-in-scale {
+    animation: scale-in 150ms ease-out both;
+  }
+
+  .stagger-1 { animation-delay: 30ms; }
+  .stagger-2 { animation-delay: 60ms; }
+  .stagger-3 { animation-delay: 90ms; }
+  .stagger-4 { animation-delay: 120ms; }
+  .stagger-5 { animation-delay: 150ms; }
+  .stagger-6 { animation-delay: 180ms; }
+}
+
+/* Focus ring */
+.focus-ring {
+  @apply transition-shadow duration-150;
+}
+.focus-ring:focus {
+  @apply outline-none ring-2 ring-ring ring-offset-2;
+}
+
+/* Scrollbar */
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-warm-300;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-warm-400;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

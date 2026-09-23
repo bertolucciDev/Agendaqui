@@ -1,0 +1,36 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+dist-vercel
+dist-mobile
+*.local
+
+# Ambiente — nunca versionar .env* real; preservar apenas o exemplo
+.env
+.env.*
+!.env.example
+
+# Vercel — pasta de tooling local contém env de build (ex.: VERCEL_OIDC_TOKEN)
+.vercel
+.vercelignore
+vercel.json
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

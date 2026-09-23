@@ -1,0 +1,23 @@
+{
+  "appId": "app.agendaqui.mobile",
+  "appName": "AgendaQui",
+  "webDir": "dist-mobile",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor",
+    "cleartext": true
+  },
+  "android": {
+    "backgroundColor": "#0b0d13"
+  },
+  "ios": {
+    "backgroundColor": "#0b0d13",
+    "contentInset": "automatic"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0b0d13"
+    }
+  }
+}
