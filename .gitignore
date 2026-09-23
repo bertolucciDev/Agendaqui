@@ -22,7 +22,7 @@ dist-mobile
 # Vercel — pasta de tooling local contém env de build (ex.: VERCEL_OIDC_TOKEN)
 .vercel
 .vercelignore
-vercel.json
+# vercel.json PRECISA ser commitado: contém o rewrite SPA (/(.*) → /index.html) — DEPLOY-D1
 
 # Editor directories and files
 .vscode/*

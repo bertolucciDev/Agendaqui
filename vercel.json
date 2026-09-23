@@ -1,0 +1,8 @@
+{
+  "buildCommand": "tsc -b && VITE_USE_MOCK=true VITE_API_URL=/agendaqui-api vite build --outDir dist-vercel",
+  "outputDirectory": "dist-vercel",
+  "rewrites": [
+    { "source": "/agendaqui-api/(.*)", "destination": "https://agendaqui-api.onrender.com/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
