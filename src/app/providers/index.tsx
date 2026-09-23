@@ -20,7 +20,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <BrowserRouter basename="/agendaqui">
+          <BrowserRouter>
             {children}
             <Toaster position="top-right" />
           </BrowserRouter>
