@@ -145,13 +145,15 @@ function DashboardLayoutInner() {
         {/* Navigation */}
         <nav className="mt-4 flex-1 space-y-0.5 px-2.5">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/')
+            const isActive =
+              location.pathname === item.to || location.pathname.startsWith(item.to + '/')
+
             return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={isActive ? 'page' : undefined}
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => setSidebarOpen(false)}
+                aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
                   isActive
