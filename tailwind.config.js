@@ -69,13 +69,13 @@ export default {
         destructive: { DEFAULT: '#ef4444', foreground: '#ffffff', 50: '#fef2f2', 100: '#fee2e2' },
         info: { DEFAULT: '#3b82f6', foreground: '#ffffff', 50: '#eff6ff', 100: '#dbeafe' },
 
-        // Ink — Text
-        ink: {
-          DEFAULT: '#111827',
-          strong: '#030712',
-          muted: '#6b7280',
-          faint: '#9ca3af',
-        },
+          // Ink — Text
+          ink: {
+            DEFAULT: '#111827',
+            strong: '#030712',
+            muted: '#6b7280',
+            faint: '#6b7280',
+          },
 
         // Surface
         surface: {
