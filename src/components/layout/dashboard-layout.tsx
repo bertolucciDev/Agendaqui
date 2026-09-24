@@ -147,10 +147,11 @@ function DashboardLayoutInner() {
           {navItems.map((item) => {
             const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/')
             return (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => setSidebarOpen(false)}
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
                   isActive
