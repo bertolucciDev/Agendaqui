@@ -24,7 +24,7 @@ export function Timeline({ appointments = [], role, membershipId }: TimelineProp
   if (appointments.length === 0) {
     return (
       <div className="card p-6">
-        <h3 className="text-sm font-semibold text-ink mb-4">Próximos agendamentos</h3>
+        <h2 className="text-sm font-semibold text-ink mb-4">Próximos agendamentos</h2>
         <div className="flex flex-col items-center py-8 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warm-100">
             <CalendarDays className="h-5 w-5 text-warm-400" />
@@ -38,7 +38,7 @@ export function Timeline({ appointments = [], role, membershipId }: TimelineProp
 
   return (
     <div className="card p-6">
-      <h3 className="text-sm font-semibold text-ink mb-4">Próximos agendamentos</h3>
+      <h2 className="text-sm font-semibold text-ink mb-4">Próximos agendamentos</h2>
       <div className="space-y-3">
         {appointments.map((apt) => {
           const status = statusConfig[apt.status]

@@ -184,7 +184,7 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-warm-200 bg-white">
+      <header className="border-b border-warm-200 bg-white">
         <div className="mx-auto max-w-lg px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 text-sm font-bold text-primary-700">
@@ -198,10 +198,10 @@ export default function BookingPage() {
             </div>
           </div>
         </div>
-      </div>
+        </header>
 
       {/* Progress */}
-      <div className="border-b border-warm-200 bg-white">
+      <section aria-label="Progresso do agendamento" className="border-b border-warm-200 bg-white">
         <div className="mx-auto max-w-lg px-4 py-3">
           <div className="flex items-center gap-2">
             {STEPS.map((s, i) => (
@@ -224,11 +224,11 @@ export default function BookingPage() {
               </div>
             ))}
           </div>
-          <p className="mt-2 text-xs font-medium text-foreground">{step.title}</p>
-        </div>
-      </div>
+            <p className="mt-2 text-xs font-medium text-foreground">{step.title}</p>
+          </div>
+        </section>
 
-        {/* Content */}
+          {/* Content */}
         <main className="mx-auto max-w-lg px-4 py-6">
         {/* Step: Service */}
         {currentStep === 0 && (
