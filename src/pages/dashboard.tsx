@@ -107,7 +107,7 @@ export default function DashboardPage() {
 
           {/* Quick Actions */}
           <div className="card p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4 font-display">Ações rápidas</h3>
+              <h2 className="text-sm font-semibold text-foreground mb-4 font-display">Ações rápidas</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <QuickAction
                 icon={Building2}

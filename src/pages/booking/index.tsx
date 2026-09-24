@@ -228,8 +228,8 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="mx-auto max-w-lg px-4 py-6">
+        {/* Content */}
+        <main className="mx-auto max-w-lg px-4 py-6">
         {/* Step: Service */}
         {currentStep === 0 && (
           <div className="space-y-3">
@@ -446,10 +446,10 @@ export default function BookingPage() {
               </CardContent>
             </Card>
           </div>
-        )}
-      </div>
+          )}
+        </main>
 
-      <AuthModal
+        <AuthModal
         open={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthenticated={handleAuthenticated}

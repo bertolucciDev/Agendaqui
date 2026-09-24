@@ -100,7 +100,7 @@ export default function StaffPage() {
                           {member.user?.name?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div>
-                          <h3 className="text-sm font-semibold text-foreground">{member.user?.name || 'Sem nome'}</h3>
+                            <h2 className="text-sm font-semibold text-foreground">{member.user?.name || 'Sem nome'}</h2>
                           <p className="text-xs text-ink-muted">{member.position || roleLabels[member.role] || member.role}</p>
                         </div>
                       </div>

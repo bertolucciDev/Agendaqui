@@ -37,14 +37,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 p-12 flex-col justify-between relative overflow-hidden">
+        {/* Left panel */}
+        <aside aria-hidden="true" className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 p-12 flex-col justify-between relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNCI+PHBhdGggZD0iTTM2IDM0djItSDJ2LTJoMzRtMC00djJIMnYtMmgzNG0wLTR2Mkgudi0yaDM0bTAtNHYySDJ2LTJoMzQiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
         <div className="relative z-10">
           <Link to="/" className="text-xl font-bold text-white font-display">Agendaqui</Link>
-          <h1 className="mt-20 text-4xl font-bold text-white leading-tight font-display">
-            Gerencie seus<br />agendamentos
-          </h1>
+            <h2 className="mt-20 text-4xl font-bold text-white leading-tight font-display">
+              Gerencie seus<br />agendamentos
+            </h2>
           <p className="mt-4 text-primary-200 text-lg max-w-sm">
             Acesse sua conta para acompanhar sua agenda, clientes e muito mais.
           </p>
@@ -57,16 +57,16 @@ export default function LoginPage() {
             </div>
           ))}
         </div>
-      </div>
+        </aside>
 
-      {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white">
-        <div className="w-full max-w-sm">
+        {/* Right panel - form */}
+        <main className="flex-1 flex items-center justify-center p-8 bg-white">
+          <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
             <Link to="/" className="text-lg font-bold text-primary-600 font-display">Agendaqui</Link>
           </div>
 
-          <h2 className="text-2xl font-bold text-foreground font-display">Bem-vindo de volta</h2>
+          <h1 className="text-2xl font-bold text-foreground font-display">Bem-vindo de volta</h1>
           <p className="mt-1.5 text-sm text-ink-muted">
             Não tem conta?{' '}
             <Link to="/register" className="text-primary-600 font-medium hover:text-primary-700">
@@ -123,9 +123,9 @@ export default function LoginPage() {
             >
               Entrar
             </Button>
-          </form>
-        </div>
+            </form>
+          </div>
+        </main>
       </div>
-    </div>
-  )
-}
+    )
+  }

@@ -42,13 +42,13 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-green-500 via-green-600 to-green-700 p-12 flex-col justify-between relative overflow-hidden">
+        <aside aria-hidden="true" className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-green-500 via-green-600 to-green-700 p-12 flex-col justify-between relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNCI+PHBhdGggZD0iTTM2IDM0djItSDJ2LTJoMzRtMC00djJIMnYtMmgzNG0wLTR2Mkgudi0yaDM0bTAtNHYySDJ2LTJoMzQiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
         <div className="relative z-10">
           <Link to="/" className="text-xl font-bold text-white font-display">Agendaqui</Link>
-          <h1 className="mt-20 text-4xl font-bold text-white leading-tight font-display">
-            Comece a<br />agendar hoje
-          </h1>
+            <h2 className="mt-20 text-4xl font-bold text-white leading-tight font-display">
+              Comece a<br />agendar hoje
+            </h2>
           <p className="mt-4 text-green-100 text-lg max-w-sm">
             Crie sua conta gratuita e comece a receber agendamentos em minutos.
           </p>
@@ -61,16 +61,16 @@ export default function RegisterPage() {
             </div>
           ))}
         </div>
-      </div>
+        </aside>
 
-      {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white">
+        {/* Right panel - form */}
+        <main className="flex-1 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
             <Link to="/" className="text-lg font-bold text-primary-600 font-display">Agendaqui</Link>
           </div>
 
-          <h2 className="text-2xl font-bold text-foreground font-display">Criar conta</h2>
+          <h1 className="text-2xl font-bold text-foreground font-display">Criar conta</h1>
           <p className="mt-1.5 text-sm text-ink-muted">
             Já tem conta?{' '}
             <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">
@@ -154,9 +154,9 @@ export default function RegisterPage() {
             >
               Criar conta
             </Button>
-          </form>
-        </div>
+            </form>
+          </div>
+        </main>
       </div>
-    </div>
-  )
-}
+    )
+  }
