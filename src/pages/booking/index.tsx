@@ -57,11 +57,13 @@ export default function BookingPage() {
     enabled: !!slug,
   })
 
-  const { data: servicesData, isLoading: loadingServices } = useQuery({
-    queryKey: ['booking-services', slug],
-    queryFn: () => businessesApi.getServicesBySlug(slug!, 1, 50),
-    enabled: !!slug,
-  })
+    const businessId = business?.id
+
+    const { data: servicesData, isLoading: loadingServices } = useQuery({
+      queryKey: ['booking-services', businessId],
+      queryFn: () => businessesApi.getServicesBySlug(businessId!, 1, 50),
+      enabled: !!businessId,
+    })
 
   const servicesList = Array.isArray(servicesData) ? servicesData : servicesData?.data || []
   const locationId = business?.locations?.[0]?.id
@@ -266,18 +268,18 @@ export default function BookingPage() {
             <Card>
               <CardContent>
                 <div className="flex items-center justify-between mb-3">
-                  <button onClick={prevWeek} className="btn-ghost !p-1.5">
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {selectedDate
-                      ? `${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
-                      : 'Selecione uma data'}
-                  </h3>
-                  <button onClick={nextWeek} className="btn-ghost !p-1.5">
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+                    <button onClick={prevWeek} className="btn-ghost !p-1.5" aria-label="Semana anterior">
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {selectedDate
+                        ? `${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+                        : 'Selecione uma data'}
+                    </h3>
+                    <button onClick={nextWeek} className="btn-ghost !p-1.5" aria-label="Próxima semana">
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
                 <div className="grid grid-cols-7 gap-1">
                   {WEEKDAYS.map((d) => (
                     <div key={d} className="py-1 text-center text-xs text-ink-muted">

@@ -120,12 +120,13 @@ function DashboardLayoutInner() {
               Agendaqui
             </span>
           </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="ml-auto lg:hidden btn-ghost !p-1"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="ml-auto lg:hidden btn-ghost !p-1"
+              aria-label="Fechar menu de navegação"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
         </div>
 
         {/* Search */}
@@ -199,12 +200,14 @@ function DashboardLayoutInner() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
         <header className="flex h-14 items-center border-b border-warm-200 bg-white px-4 lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="btn-ghost !p-1.5"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="btn-ghost !p-1.5"
+              aria-label="Abrir menu de navegação"
+              aria-expanded={sidebarOpen}
+            >
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </button>
           <div className="ml-2.5 flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-white">
               A

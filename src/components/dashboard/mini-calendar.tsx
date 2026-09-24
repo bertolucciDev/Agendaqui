@@ -39,15 +39,15 @@ export function MiniCalendar({ selectedDate, onDateSelect, appointmentDays = [] 
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth} className="btn-ghost !p-1.5">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <h3 className="text-sm font-semibold text-ink">
-          {MONTHS[month]} {year}
-        </h3>
-        <button onClick={nextMonth} className="btn-ghost !p-1.5">
-          <ChevronRight className="h-4 w-4" />
-        </button>
+          <button onClick={prevMonth} className="btn-ghost !p-1.5" aria-label="Mês anterior">
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <h3 className="text-sm font-semibold text-ink">
+            {MONTHS[month]} {year}
+          </h3>
+          <button onClick={nextMonth} className="btn-ghost !p-1.5" aria-label="Próximo mês">
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
       </div>
 
       <div className="grid grid-cols-7 gap-0.5">

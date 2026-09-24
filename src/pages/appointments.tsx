@@ -167,15 +167,15 @@ export default function AppointmentsPage() {
           {/* Week Navigation */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-1">
-              <button onClick={prevWeek} className="btn-ghost !p-1.5">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button onClick={goToToday} className="btn-ghost text-xs">
-                Hoje
-              </button>
-              <button onClick={nextWeek} className="btn-ghost !p-1.5">
-                <ChevronRight className="h-4 w-4" />
-              </button>
+                <button onClick={prevWeek} className="btn-ghost !p-1.5" aria-label="Semana anterior">
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button onClick={goToToday} className="btn-ghost text-xs">
+                  Hoje
+                </button>
+                <button onClick={nextWeek} className="btn-ghost !p-1.5" aria-label="Próxima semana">
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
             </div>
             <span className="text-sm font-medium text-foreground">
               {weekStart.getDate()} {MONTHS[weekStart.getMonth()]} - {weekEnd.getDate()} {MONTHS[weekEnd.getMonth()]}
