@@ -11,11 +11,13 @@ const DashboardPage = lazy(() => import('@/pages/dashboard'))
 const BusinessesPage = lazy(() => import('@/pages/businesses'))
 const BusinessNewPage = lazy(() => import('@/pages/businesses.new'))
 const LocationsPage = lazy(() => import('@/pages/locations'))
+const LocationNewPage = lazy(() => import('@/pages/locations.new'))
 const ServicesPage = lazy(() => import('@/pages/services'))
 const ServiceNewPage = lazy(() => import('@/pages/services.new'))
 const StaffPage = lazy(() => import('@/pages/staff'))
 const StaffNewPage = lazy(() => import('@/pages/staff.new'))
 const AppointmentsPage = lazy(() => import('@/pages/appointments'))
+const AppointmentNewPage = lazy(() => import('@/pages/appointments.new'))
 const VerifyEmailPage = lazy(() => import('@/pages/verify-email'))
 const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password'))
 const SettingsPage = lazy(() => import('@/pages/settings'))
@@ -72,10 +74,12 @@ export default function App() {
             <Route path="/businesses" element={<BusinessesPage />} />
             <Route path="/businesses/new" element={<BusinessNewPage />} />
             <Route path="/locations" element={<LocationsPage />} />
+            <Route path="/locations/new" element={<LocationNewPage />} />
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/services/new" element={<ServiceNewPage />} />
             <Route path="/staff" element={<StaffPage />} />
             <Route path="/staff/new" element={<StaffNewPage />} />
+            <Route path="/appointments/new" element={<AppointmentNewPage />} />
             <Route path="/appointments/*" element={<AppointmentsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/onboarding" element={<OnboardingPage />} />
