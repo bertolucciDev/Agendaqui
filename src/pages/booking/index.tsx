@@ -16,7 +16,6 @@ import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -171,13 +170,15 @@ export default function BookingPage() {
 
   if (!business) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <EmptyState
-          icon={Calendar}
-          title="Negócio não encontrado"
-          description="Verifique o link e tente novamente."
-        />
-      </div>
+      <main className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-warm-100">
+            <Calendar className="h-6 w-6 text-ink-faint" aria-hidden="true" />
+          </div>
+          <h1 className="mt-4 text-base font-semibold text-foreground font-display">Negócio não encontrado</h1>
+          <p className="mt-1.5 max-w-sm text-sm text-ink-muted">Verifique o link e tente novamente.</p>
+        </div>
+      </main>
     )
   }
 
