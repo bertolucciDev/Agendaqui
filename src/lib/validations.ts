@@ -43,7 +43,7 @@ export const locationSchema = z.object({
   city: z.string().min(2, 'Cidade inválida'),
   state: z.string().length(2, 'UF inválido'),
   cep: z.string().length(9, 'CEP inválido'),
-  timezone: z.string().default('America/Sao_Paulo'),
+  timezone: z.string().min(1),
   attendanceType: z.enum(['AT_LOCATION', 'AT_CUSTOMER', 'BOTH']),
   phone: z.string().optional(),
 })
@@ -62,6 +62,16 @@ export const staffSchema = z.object({
   locationId: z.string().min(1, 'Selecione um local'),
   role: z.enum(['MANAGER', 'EMPLOYEE']),
   position: z.string().min(2, 'Cargo inválido'),
+})
+
+export const appointmentSchema = z.object({
+  locationId: z.string().min(1, 'Selecione um local'),
+  serviceId: z.string().min(1, 'Selecione um serviço'),
+  employeeMembershipId: z.string().optional(),
+  date: z.string().min(1, 'Data obrigatória'),
+  time: z.string().min(1, 'Horário obrigatório'),
+  clientName: z.string().optional(),
+  clientPhone: z.string().optional(),
 })
 
 export const forgotPasswordSchema = z.object({
@@ -83,5 +93,6 @@ export type BusinessFormData = z.infer<typeof businessSchema>
 export type LocationFormData = z.infer<typeof locationSchema>
 export type ServiceFormData = z.infer<typeof serviceSchema>
 export type StaffFormData = z.infer<typeof staffSchema>
+export type AppointmentFormData = z.infer<typeof appointmentSchema>
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>
