@@ -76,15 +76,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                   i < currentStep
                     ? 'bg-brand-500 text-white'
                     : i === currentStep
-                    ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-400'
-                    : 'bg-warm-200 text-ink-faint'
+                    ? 'bg-primary-soft text-primary-soft-fg ring-2 ring-primary-400'
+                    : 'bg-border text-muted-foreground'
                 }`}
               >
                 {i < currentStep ? <Check className="h-4 w-4" /> : i + 1}
               </div>
             ))}
           </div>
-          <div className="h-1.5 bg-warm-200 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-border rounded-full overflow-hidden">
             <div
               className="h-full bg-brand-500 rounded-full transition-all duration-500"
               style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
@@ -94,12 +94,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
         {/* Card */}
         <div className="card p-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-100 mx-auto mb-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-soft mx-auto mb-4">
             <step.icon className="h-8 w-8 text-brand-500" />
           </div>
 
           <h2 className="text-xl font-bold text-ink">{step.title}</h2>
-          <p className="mt-1 text-sm text-ink-muted">{step.description}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
 
           <div className="mt-6 text-left">
             {step.id === 'business' && (
@@ -123,8 +123,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         onClick={() => updateData('businessType', type)}
                         className={`flex-1 rounded-lg border p-3 text-sm font-medium transition-all ${
                           data.businessType === type
-                            ? 'border-brand-400 bg-brand-50 text-brand-700'
-                            : 'border-warm-300 text-ink-muted hover:border-warm-400'
+                            ? 'border-primary-400 bg-primary-soft text-primary-soft-fg'
+                            : 'border-border-strong text-muted-foreground hover:border-border-strong'
                         }`}
                       >
                         {type === 'COMPANY' ? 'Empresa' : 'Individual'}

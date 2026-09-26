@@ -13,10 +13,10 @@ export default function LocationsPage() {
   const queryClient = useQueryClient()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
-  const { businessId } = useActiveBusiness()
+  const { businessId, activeMode } = useActiveBusiness()
 
   const { data: locations = [], isLoading } = useQuery({
-    queryKey: ['locations', businessId],
+    queryKey: ['locations', activeMode, businessId],
     queryFn: () => locationsApi.list(businessId!),
     enabled: !!businessId,
   })
@@ -73,7 +73,7 @@ export default function LocationsPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">{loc.name}</h3>
-                        <p className="text-xs text-ink-muted">{loc.attendanceType === 'AT_LOCATION' ? 'No local' : loc.attendanceType === 'AT_CUSTOMER' ? 'No cliente' : 'Ambos'}</p>
+                        <p className="text-xs text-muted-foreground">{loc.attendanceType === 'AT_LOCATION' ? 'No local' : loc.attendanceType === 'AT_CUSTOMER' ? 'No cliente' : 'Ambos'}</p>
                       </div>
                     </div>
                     <div className="relative">
@@ -84,13 +84,13 @@ export default function LocationsPage() {
                         <MoreVertical className="h-4 w-4" />
                       </button>
                       {menuOpen === loc.id && (
-                        <div className="absolute right-0 top-8 z-10 w-36 rounded-lg border border-warm-200 bg-white shadow-lg">
+                        <div className="absolute right-0 top-8 z-10 w-36 rounded-lg border border-border bg-surface-overlay shadow-lg">
                           <button
                             onClick={() => {
                               deleteMutation.mutate(loc.id)
                               setMenuOpen(null)
                             }}
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive-soft-fg hover:bg-destructive-soft"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             Remover
@@ -99,9 +99,9 @@ export default function LocationsPage() {
                       )}
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-ink-muted">{loc.address}</p>
+                  <p className="mt-3 text-xs text-muted-foreground">{loc.address}</p>
                   {loc.phone && (
-                    <p className="mt-1 text-xs text-ink-faint">{loc.phone}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{loc.phone}</p>
                   )}
                 </div>
               ))}

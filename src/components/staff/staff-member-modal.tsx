@@ -157,28 +157,28 @@ export function StaffMemberModal({
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-sm">
       <div className="card w-full max-w-md p-6 animate-in-scale">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-bold text-foreground font-display">
               {member.user?.name || 'Sem nome'}
             </h3>
-            <p className="text-xs text-ink-muted">{member.position || member.role}</p>
+            <p className="text-xs text-muted-foreground">{member.position || member.role}</p>
           </div>
           <button onClick={onClose} className="btn-ghost !p-1.5" aria-label="Fechar">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex rounded-lg border border-warm-200 mb-5">
+        <div className="flex rounded-lg border border-border mb-5">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
                 'flex flex-1 items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
-                tab === t.id ? 'bg-primary-50 text-primary-700' : 'text-ink-muted hover:bg-warm-50'
+                tab === t.id ? 'bg-primary-soft text-primary-soft-fg' : 'text-muted-foreground hover:bg-muted'
               )}
             >
               <t.icon className="h-3.5 w-3.5" />
@@ -212,13 +212,13 @@ export function StaffMemberModal({
                 ]}
                 onChange={(e) => setRole(e.target.value as MembershipRole)}
               />
-              {isOwner && <p className="mt-1 text-xs text-ink-muted">O papel de proprietário não pode ser alterado.</p>}
+              {isOwner && <p className="mt-1 text-xs text-muted-foreground">O papel de proprietário não pode ser alterado.</p>}
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-warm-200 p-3">
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
                 <p className="text-sm font-medium text-foreground">Membro ativo</p>
-                <p className="text-xs text-ink-muted">
+                <p className="text-xs text-muted-foreground">
                   {isSelf ? 'Você não pode desativar a si mesmo.' : 'Inativos não recebem agendamentos.'}
                 </p>
               </div>
@@ -227,7 +227,7 @@ export function StaffMemberModal({
                 disabled={isSelf}
                 className={cn(
                   'relative h-6 w-11 rounded-full transition-colors',
-                  active ? 'bg-success' : 'bg-warm-200',
+                  active ? 'bg-success' : 'bg-border',
                   isSelf && 'opacity-40 cursor-not-allowed'
                 )}
                 aria-label="Alternar ativo"
@@ -254,17 +254,17 @@ export function StaffMemberModal({
 
         {tab === 'hours' && (
           <div className="space-y-2">
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-muted-foreground">
               Defina os horários de atendimento por dia da semana.
             </p>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {days.map((d) => (
-                <div key={d.dayOfWeek} className="flex items-center gap-2 rounded-lg border border-warm-200 p-2">
+                <div key={d.dayOfWeek} className="flex items-center gap-2 rounded-lg border border-border p-2">
                   <button
                     onClick={() => setDay(d.dayOfWeek, { open: !d.open })}
                     className={cn(
                       'h-6 w-11 relative rounded-full transition-colors shrink-0',
-                      d.open ? 'bg-success' : 'bg-warm-200'
+                      d.open ? 'bg-success' : 'bg-border'
                     )}
                     aria-label="Atende neste dia"
                   >
@@ -275,7 +275,7 @@ export function StaffMemberModal({
                       )}
                     />
                   </button>
-                  <span className={cn('w-16 text-xs font-medium', d.open ? 'text-foreground' : 'text-ink-faint line-through')}>
+                  <span className={cn('w-16 text-xs font-medium', d.open ? 'text-foreground' : 'text-muted-foreground line-through')}>
                     {DAY_LABELS[d.dayOfWeek]}
                   </span>
                   <div className="flex flex-1 items-center gap-1">
@@ -283,18 +283,18 @@ export function StaffMemberModal({
                       value={String(d.startMinute)}
                       disabled={!d.open}
                       onChange={(e) => setDay(d.dayOfWeek, { startMinute: Number(e.target.value) })}
-                      className="flex-1 rounded-lg border border-warm-200 bg-white px-1.5 py-1 text-xs text-foreground disabled:opacity-40"
+                      className="flex-1 rounded-lg border border-border bg-input-bg px-1.5 py-1 text-xs text-foreground disabled:opacity-40"
                     >
                       {HOUR_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
-                    <span className="text-xs text-ink-faint">às</span>
+                    <span className="text-xs text-muted-foreground">às</span>
                     <select
                       value={String(d.endMinute)}
                       disabled={!d.open}
                       onChange={(e) => setDay(d.dayOfWeek, { endMinute: Number(e.target.value) })}
-                      className="flex-1 rounded-lg border border-warm-200 bg-white px-1.5 py-1 text-xs text-foreground disabled:opacity-40"
+                      className="flex-1 rounded-lg border border-border bg-input-bg px-1.5 py-1 text-xs text-foreground disabled:opacity-40"
                     >
                       {HOUR_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
@@ -317,7 +317,7 @@ export function StaffMemberModal({
 
         {tab === 'services' && (
           <div className="space-y-2">
-            <p className="text-xs text-ink-muted">
+            <p className="text-xs text-muted-foreground">
               Serviços que este profissional pode executar. Apenas os selecionados geram horários no agendamento.
             </p>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
@@ -331,27 +331,27 @@ export function StaffMemberModal({
                     disabled={pending}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-colors',
-                      assigned ? 'border-primary-200 bg-primary-50' : 'border-warm-200 hover:border-primary-200',
+                      assigned ? 'border-primary-200 bg-primary-soft' : 'border-border hover:border-primary-200',
                       pending && 'opacity-50'
                     )}
                   >
                     <span
                       className={cn(
                         'flex h-5 w-5 items-center justify-center rounded-md border transition-colors',
-                        assigned ? 'border-primary-500 bg-primary-500 text-white' : 'border-warm-300 bg-white'
+                        assigned ? 'border-primary-500 bg-primary-500 text-white' : 'border-border bg-surface'
                       )}
                     >
                       {assigned && <Check className="h-3 w-3" />}
                     </span>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-foreground">{svc.name}</p>
-                      <p className="text-xs text-ink-muted">{svc.durationMinutes}min</p>
+                      <p className="text-xs text-muted-foreground">{svc.durationMinutes}min</p>
                     </div>
                   </button>
                 )
               })}
               {services.length === 0 && (
-                <p className="py-6 text-center text-sm text-ink-muted">Nenhum serviço cadastrado.</p>
+                <p className="py-6 text-center text-sm text-muted-foreground">Nenhum serviço cadastrado.</p>
               )}
             </div>
           </div>

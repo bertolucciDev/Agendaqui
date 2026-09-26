@@ -61,7 +61,7 @@ export default function NewBusinessPage() {
       return business
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+      queryClient.invalidateQueries({ queryKey: ['session'] })
       toast.success('Negócio e primeira unidade criados!')
       navigate('/businesses')
     },
@@ -154,13 +154,13 @@ export default function NewBusinessPage() {
                     {(['COMPANY', 'INDIVIDUAL'] as const).map((type) => (
                       <label key={type} className="flex-1">
                         <input type="radio" value={type} className="sr-only peer" {...register('type')} />
-                        <div className="cursor-pointer rounded-lg border border-warm-300 p-3 text-center text-sm font-medium transition-all peer-checked:border-primary-400 peer-checked:bg-primary-50 peer-checked:text-primary-700">
+                        <div className="cursor-pointer rounded-lg border border-border-strong p-3 text-center text-sm font-medium transition-all peer-checked:border-primary-400 peer-checked:bg-primary-soft peer-checked:text-primary-soft-fg">
                           {type === 'COMPANY' ? 'Empresa' : 'Individual'}
                         </div>
                       </label>
                     ))}
                   </div>
-                  {errors.type && <p className="mt-1 text-xs text-red-500">{errors.type.message}</p>}
+                  {errors.type && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.type.message}</p>}
                 </div>
 
                 <div>
@@ -174,7 +174,7 @@ export default function NewBusinessPage() {
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
-                  {errors.categoryId && <p className="mt-1 text-xs text-red-500">{errors.categoryId.message}</p>}
+                  {errors.categoryId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.categoryId.message}</p>}
                 </div>
 
                 <Input
@@ -291,13 +291,13 @@ export default function NewBusinessPage() {
                     ] as const).map((opt) => (
                       <label key={opt.value} className="flex-1">
                         <input type="radio" value={opt.value} className="sr-only peer" {...register('attendanceType')} />
-                        <div className="cursor-pointer rounded-lg border border-warm-300 p-3 text-center text-sm font-medium transition-all peer-checked:border-primary-400 peer-checked:bg-primary-50 peer-checked:text-primary-700">
+                        <div className="cursor-pointer rounded-lg border border-border-strong p-3 text-center text-sm font-medium transition-all peer-checked:border-primary-400 peer-checked:bg-primary-soft peer-checked:text-primary-soft-fg">
                           {opt.label}
                         </div>
                       </label>
                     ))}
                   </div>
-                  {errors.attendanceType && <p className="mt-1 text-xs text-red-500">{errors.attendanceType.message}</p>}
+                  {errors.attendanceType && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.attendanceType.message}</p>}
                 </div>
 
                 <div>
@@ -310,7 +310,7 @@ export default function NewBusinessPage() {
                     <option value="America/Manaus">Horário da Amazônia</option>
                     <option value="America/Noronha">Horário de Fernando de Noronha</option>
                   </select>
-                  {errors.timezone && <p className="mt-1 text-xs text-red-500">{errors.timezone.message}</p>}
+                  {errors.timezone && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.timezone.message}</p>}
                 </div>
 
                 <Button

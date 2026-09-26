@@ -24,11 +24,11 @@ import { cn } from '@/lib/utils'
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 7)
 
 const statusConfig: Record<AppointmentStatus, { label: string; className: string }> = {
-  PENDING: { label: 'Pendente', className: 'bg-warning-50 text-amber-700 border border-warning-200' },
-  CONFIRMED: { label: 'Confirmado', className: 'bg-primary-50 text-primary-700 border border-primary-200' },
-  COMPLETED: { label: 'Concluído', className: 'bg-warm-100 text-warm-600 border border-warm-200' },
-  CANCELLED: { label: 'Cancelado', className: 'bg-warm-50 text-warm-400 border border-warm-200 line-through' },
-  NO_SHOW: { label: 'Não compareceu', className: 'bg-destructive-50 text-red-500 border border-destructive-200' },
+  PENDING: { label: 'Pendente', className: 'bg-warning-soft text-warning-soft-fg border border-border' },
+  CONFIRMED: { label: 'Confirmado', className: 'bg-primary-soft text-primary-soft-fg border border-border' },
+  COMPLETED: { label: 'Concluído', className: 'bg-surface-sunken text-muted-foreground border border-border' },
+  CANCELLED: { label: 'Cancelado', className: 'bg-surface-sunken text-muted-foreground border border-border line-through' },
+  NO_SHOW: { label: 'Não compareceu', className: 'bg-destructive-soft text-destructive-soft-fg border border-border' },
 }
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -65,10 +65,10 @@ export default function AppointmentsPage() {
   }, [weekStart])
 
   const { user } = useAuth()
-  const { businessId } = useActiveBusiness()
+  const { businessId, activeMode } = useActiveBusiness()
 
   const { data: employees = [] } = useQuery({
-    queryKey: ['business-employees', businessId],
+    queryKey: ['business-employees', activeMode, businessId],
     queryFn: () => staffApi.listByBusiness(businessId!),
     enabled: !!businessId,
   })
@@ -78,7 +78,7 @@ export default function AppointmentsPage() {
   const currentMembershipId = currentMembership?.id
 
   const { data: appointments = [] } = useQuery({
-    queryKey: ['appointments', businessId, weekStart.toISOString(), weekEnd.toISOString()],
+    queryKey: ['appointments', activeMode, businessId, weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
       if (!businessId) return []
       const res = await appointmentsApi.listBusiness(businessId, {
@@ -128,17 +128,17 @@ export default function AppointmentsPage() {
       <PageHeader>
         <div>
           <PageTitle>Agendamentos</PageTitle>
-          <p className="text-xs text-ink-muted mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {MONTHS[selectedDate.getMonth()]} {selectedDate.getFullYear()}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-warm-200 bg-white">
+          <div className="flex rounded-lg border border-border bg-surface">
             <button
               onClick={() => setView('week')}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium transition-colors rounded-l-lg',
-                view === 'week' ? 'bg-primary-50 text-primary-700' : 'text-ink-muted hover:bg-warm-50'
+                view === 'week' ? 'bg-primary-soft text-primary-soft-fg' : 'text-muted-foreground hover:bg-muted'
               )}
             >
               Semana
@@ -147,7 +147,7 @@ export default function AppointmentsPage() {
               onClick={() => setView('day')}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium transition-colors rounded-r-lg',
-                view === 'day' ? 'bg-primary-50 text-primary-700' : 'text-ink-muted hover:bg-warm-50'
+                view === 'day' ? 'bg-primary-soft text-primary-soft-fg' : 'text-muted-foreground hover:bg-muted'
               )}
             >
               Dia
@@ -185,8 +185,8 @@ export default function AppointmentsPage() {
           {/* Calendar Grid */}
           <div className="card overflow-hidden">
             {/* Day Headers */}
-            <div className={cn('grid border-b border-warm-200', view === 'week' ? 'grid-cols-[4rem_repeat(7,1fr)]' : 'grid-cols-[4rem_1fr]')}>
-              <div className="border-r border-warm-200 bg-warm-50" />
+            <div className={cn('grid border-b border-border', view === 'week' ? 'grid-cols-[4rem_repeat(7,1fr)]' : 'grid-cols-[4rem_1fr]')}>
+              <div className="border-r border-border bg-surface-sunken" />
               {(view === 'week' ? weekDays : [selectedDate]).map((day, i) => {
                 const isToday = day.toDateString() === new Date().toDateString()
                 const dayApts = getAppointmentsForDay(day)
@@ -194,18 +194,18 @@ export default function AppointmentsPage() {
                   <div
                     key={i}
                     className={cn(
-                      'border-r border-warm-200 px-2 py-3 text-center',
-                      isToday ? 'bg-primary-50' : 'bg-warm-50'
+                      'border-r border-border px-2 py-3 text-center',
+                      isToday ? 'bg-primary-soft' : 'bg-surface-sunken'
                     )}
                   >
-                    <p className={cn('text-xs', isToday ? 'text-primary-600 font-bold' : 'text-ink-muted')}>
+                    <p className={cn('text-xs', isToday ? 'text-primary-soft-fg font-bold' : 'text-muted-foreground')}>
                       {WEEKDAYS[day.getDay()]}
                     </p>
-                    <p className={cn('text-lg font-bold', isToday ? 'text-primary-700' : 'text-foreground')}>
+                    <p className={cn('text-lg font-bold', isToday ? 'text-primary-soft-fg' : 'text-foreground')}>
                       {day.getDate()}
                     </p>
                     {dayApts.length > 0 && (
-                      <p className="text-xs text-primary-500 font-medium">
+                      <p className="text-xs text-primary-accent font-medium">
                         {dayApts.length} agendamento{dayApts.length > 1 ? 's' : ''}
                       </p>
                     )}
@@ -218,8 +218,8 @@ export default function AppointmentsPage() {
             <div className={cn('grid', view === 'week' ? 'grid-cols-[4rem_repeat(7,1fr)]' : 'grid-cols-[4rem_1fr]')}>
               {HOURS.map((hour) => (
                 <div key={hour} className="contents">
-                  <div className="border-r border-b border-warm-100 px-2 py-3 text-right">
-                    <span className="text-xs text-ink-faint">{String(hour).padStart(2, '0')}:00</span>
+                  <div className="border-r border-b border-border-muted px-2 py-3 text-right">
+                    <span className="text-xs text-muted-foreground">{String(hour).padStart(2, '0')}:00</span>
                   </div>
 
                   {(view === 'week' ? weekDays : [selectedDate]).map((day, dayIdx) => {
@@ -229,8 +229,8 @@ export default function AppointmentsPage() {
                       <div
                         key={dayIdx}
                         className={cn(
-                          'border-r border-b border-warm-100 min-h-[3rem] p-0.5',
-                          isToday && 'bg-primary-50/30'
+                          'border-r border-b border-border-muted min-h-[3rem] p-0.5',
+                            isToday && 'bg-primary-soft/30'
                         )}
                       >
                         {hourApts.map((apt) => {
@@ -247,9 +247,9 @@ export default function AppointmentsPage() {
                               <div className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 <span className="font-bold">{formatTime(apt.startsAt)}</span>
-                                <span className="text-[10px] opacity-70">
-                                  {formatDuration(apt.startsAt, apt.endsAt)}min
-                                </span>
+                                  <span className="text-[10px]">
+                                    {formatDuration(apt.startsAt, apt.endsAt)}min
+                                  </span>
                               </div>
                               {apt.service?.name && (
                                 <p className="mt-0.5 truncate font-medium">{apt.service.name}</p>
@@ -286,7 +286,7 @@ export default function AppointmentsPage() {
 
       {/* Appointment Detail Modal */}
       {selectedAppointment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-sm">
           <div className="card w-full max-w-sm p-6 animate-in-scale">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground font-display">Detalhes</h3>
@@ -300,14 +300,14 @@ export default function AppointmentsPage() {
 
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
                   <Clock className="h-5 w-5 text-primary-500" />
                 </div>
                 <div>
                   <p className="text-sm font-bold text-foreground">
                     {formatTime(selectedAppointment.startsAt)} - {formatTime(selectedAppointment.endsAt)}
                   </p>
-                  <p className="text-xs text-ink-muted">
+                  <p className="text-xs text-muted-foreground">
                     {new Date(selectedAppointment.startsAt).toLocaleDateString('pt-BR', {
                       weekday: 'long',
                       day: 'numeric',
@@ -324,7 +324,7 @@ export default function AppointmentsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">{selectedAppointment.service.name}</p>
-                    <p className="text-xs text-ink-muted">
+                    <p className="text-xs text-muted-foreground">
                       {formatDuration(selectedAppointment.startsAt, selectedAppointment.endsAt)} minutos
                     </p>
                   </div>
@@ -339,7 +339,7 @@ export default function AppointmentsPage() {
                   <p className="text-sm font-medium text-foreground">
                     {selectedAppointment.employee?.user?.name || 'Sem profissional'}
                   </p>
-                  <p className="text-xs text-ink-muted">Profissional</p>
+                  <p className="text-xs text-muted-foreground">Profissional</p>
                 </div>
               </div>
 
@@ -350,13 +350,13 @@ export default function AppointmentsPage() {
               </div>
 
               {selectedAppointment.cancelReason && (
-                <div className="rounded-lg border border-warm-200 bg-warm-50 p-3 text-xs text-ink-muted">
+                <div className="rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">
                   <span className="font-semibold text-ink">Motivo do cancelamento:</span> {selectedAppointment.cancelReason}
                 </div>
               )}
 
               {currentRole && (
-                <div className="pt-2 border-t border-warm-100">
+                <div className="pt-2 border-t border-border-muted">
                   <AppointmentActions
                     appointment={selectedAppointment}
                     role={currentRole}

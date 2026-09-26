@@ -30,15 +30,15 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex min-h-screen items-center justify-center bg-surface-warm p-6">
           <div className="w-full max-w-sm text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-peach-100">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-peach-soft">
               <AlertTriangle className="h-8 w-8 text-peach-400" />
             </div>
             <h1 className="mt-6 text-xl font-bold text-ink">Algo deu errado</h1>
-            <p className="mt-2 text-sm text-ink-muted">
+            <p className="mt-2 text-sm text-muted-foreground">
               Ocorreu um erro inesperado. Tente recarregar a página.
             </p>
             {this.state.error && (
-              <p className="mt-3 rounded-lg bg-warm-100 p-3 text-xs text-ink-faint font-mono">
+              <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground font-mono">
                 {this.state.error.message}
               </p>
             )}

@@ -8,6 +8,9 @@ import {
   type MockAppointmentStatus,
   type MockMembership,
   type MockService,
+  type MockDb,
+  type MeSessionPayload,
+  type SessionMode,
 } from './db'
 
 export class ApiError extends Error {
@@ -56,6 +59,60 @@ function currentUser() {
   const tokenId = token?.startsWith('mock-user-') ? token.slice('mock-user-'.length) : null
   const id = tokenId || db.sessionUserId
   return db.users.find((u) => u.id === id) || null
+}
+
+/* ───── CONTRACT FREEZE: matriz mínima role→permissions (server-computed) ───── */
+const ROLE_PERMISSIONS: Record<MockMembership['role'], string[]> = {
+  OWNER: ['business:manage', 'staff:write', 'services:write', 'appointments:write', 'appointments:read', 'customers:read'],
+  MANAGER: ['staff:write', 'services:write', 'appointments:write', 'appointments:read', 'customers:read'],
+  EMPLOYEE: ['appointments:write', 'appointments:read'],
+}
+
+/* Derivação congelada: OWNER/MANAGER ⇒ modo OWNER; EMPLOYEE ⇒ PROFESSIONAL; CustomerProfile ⇒ CUSTOMER */
+function buildMeSession(db: MockDb, userId: string): MeSessionPayload {
+  const memberships = db.memberships.filter((m) => m.userId === userId && m.active)
+  const businesses = db.businesses
+    .filter((b) => memberships.some((m) => m.businessId === b.id))
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      memberships: memberships
+        .filter((m) => m.businessId === b.id)
+        .map((m) => ({
+          id: m.id,
+          role: m.role,
+          // OWNER/MANAGER (gestão) enxergam todos os locais ativos do business;
+          // EMPLOYEE fica restrito ao(s) local(is) da própria membership.
+          locationIds:
+            m.role === 'EMPLOYEE'
+              ? m.locationId
+                ? [m.locationId]
+                : []
+              : db.locations
+                  .filter((l) => l.businessId === b.id && l.status === 'ACTIVE')
+                  .map((l) => l.id),
+          permissions: ROLE_PERMISSIONS[m.role],
+          active: m.active,
+        })),
+    }))
+
+  const customerProfile = db.customerProfiles.find((c) => c.userId === userId) || null
+
+  const availableModes: SessionMode[] = []
+  if (memberships.some((m) => m.role === 'OWNER' || m.role === 'MANAGER')) availableModes.push('OWNER')
+  if (memberships.some((m) => m.role === 'EMPLOYEE')) availableModes.push('PROFESSIONAL')
+  if (customerProfile) availableModes.push('CUSTOMER')
+
+  const prefs = db.preferences[userId] || { activeMode: null, activeBusinessId: null }
+
+  return {
+    user: { id: userId },
+    availableModes,
+    businesses,
+    customerProfile: customerProfile ? { id: customerProfile.id } : null,
+    isPlatformAdmin: false,
+    preferences: prefs,
+  }
 }
 
 function withBusinessRelations(businessId: string) {
@@ -139,10 +196,17 @@ export function handleRequest(
 
   const db = getDb()
 
-  /* ---------------- auth ---------------- */
-  if (segs[0] === 'auth') {
-    return handleAuth(method, segs, body)
-  }
+    /* ---------------- auth ---------------- */
+    if (segs[0] === 'auth') {
+      return handleAuth(method, segs, body)
+    }
+
+    /* -------- CONTRACT FREEZE: GET /me/session (docs/CONTRACT-me-session.md) -------- */
+    if (segs[0] === 'me' && segs[1] === 'session' && method === 'get') {
+      const user = currentUser()
+      if (!user) throw new ApiError(401, 'Unauthorized')
+      return ok(buildMeSession(db, user.id))
+    }
 
   /* ---------------- users ---------------- */
   if (segs[0] === 'users') {

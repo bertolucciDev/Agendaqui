@@ -9,11 +9,11 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 
 const variantClasses: Record<BadgeVariant, string> = {
   primary: 'bg-primary-50 text-primary-700',
-  success: 'bg-success-50 text-green-700',
-  warning: 'bg-warning-50 text-amber-700',
-  destructive: 'bg-destructive-50 text-red-700',
-  info: 'bg-info-50 text-blue-700',
-  neutral: 'bg-warm-100 text-warm-600',
+  success: 'bg-success-soft text-success-soft-fg',
+  warning: 'bg-warning-soft text-warning-soft-fg',
+  destructive: 'bg-destructive-soft text-destructive-soft-fg',
+  info: 'bg-info-soft text-info-soft-fg',
+  neutral: 'bg-muted text-muted-foreground',
 }
 
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(

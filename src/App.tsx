@@ -3,6 +3,7 @@ import { AppProviders } from '@/app/providers'
 import { useAuth } from '@/app/providers/auth'
 import { lazy, Suspense } from 'react'
 import DashboardLayout from '@/components/layout/dashboard-layout'
+import { WorkspaceGate } from '@/components/layout/workspace-gate'
 
 const HomePage = lazy(() => import('@/pages/home'))
 const LoginPage = lazy(() => import('@/pages/login'))
@@ -66,7 +67,9 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <DashboardLayout />
+                <WorkspaceGate>
+                  <DashboardLayout />
+                </WorkspaceGate>
               </ProtectedRoute>
             }
           >

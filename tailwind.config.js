@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,16 +8,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Semantic color tokens
-        background: '#f8f9fb',
-        foreground: '#111827',
-        muted: '#f1f3f5',
-        'muted-foreground': '#6b7280',
-        card: '#ffffff',
-        'card-foreground': '#111827',
-        border: '#e4e7ec',
-        'border-muted': '#f1f3f5',
-        input: '#e4e7ec',
+        // Semantic color tokens — sustentados por CSS variables (light/dark)
+        background: 'var(--bg)',
+        foreground: 'var(--fg)',
+        muted: 'var(--muted)',
+        'muted-foreground': 'var(--muted-fg)',
+        card: 'var(--surface-raised)',
+        'card-foreground': 'var(--fg)',
+        border: 'var(--border)',
+        'border-muted': 'var(--border-muted)',
+        input: 'var(--border)',
         ring: '#6366f1',
 
           // Primary — Indigo
@@ -35,7 +36,7 @@ export default {
             foreground: '#ffffff',
           },
 
-        // Secondary — Neutral
+        // Secondary — Neutral (DEFAULT/foreground viram semânticos; scale física preservada)
         secondary: {
           50: '#f8f9fb',
           100: '#f1f3f5',
@@ -47,8 +48,8 @@ export default {
           700: '#374151',
           800: '#1f2937',
           900: '#111827',
-          DEFAULT: '#f1f3f5',
-          foreground: '#111827',
+          DEFAULT: 'var(--muted)',
+          foreground: 'var(--fg)',
         },
 
         // Accent — Subtle highlight
@@ -69,23 +70,24 @@ export default {
         destructive: { DEFAULT: '#ef4444', foreground: '#ffffff', 50: '#fef2f2', 100: '#fee2e2' },
         info: { DEFAULT: '#3b82f6', foreground: '#ffffff', 50: '#eff6ff', 100: '#dbeafe' },
 
-          // Ink — Text
+          // Ink — Text (semântico, dark-safe)
           ink: {
-            DEFAULT: '#111827',
-            strong: '#030712',
-            muted: '#6b7280',
-            faint: '#6b7280',
+            DEFAULT: 'var(--fg)',
+            strong: 'var(--fg-strong)',
+            muted: 'var(--muted-fg)',
+            faint: 'var(--muted-fg)',
           },
 
-        // Surface
+        // Surface — hierarquia visual (sea a base; tokens há white→tiers escuros projetados)
         surface: {
-          DEFAULT: '#ffffff',
-          raised: '#ffffff',
-          sunken: '#f8f9fb',
-          warm: '#f8f9fb',
+          DEFAULT: 'var(--surface)',
+          raised: 'var(--surface-raised)',
+          sunken: 'var(--surface-sunken)',
+          warm: 'var(--surface)',
         },
 
-        // Warm neutrals (border, bg)
+        // Warm neutrals (border, bg) — mantém a escala física (tintas de projeto), mas os usos
+        // em componentes base foram migrados para tokens semânticos; aqui continua a paleta light.
         warm: {
           50: '#f8f9fb',
           100: '#f1f3f5',
@@ -98,6 +100,27 @@ export default {
           800: '#1f2937',
           900: '#111827',
         },
+
+        // Tokens de tema semântico (FE-01)
+        'surface-overlay': 'var(--surface-overlay)',
+        'border-strong': 'var(--border-strong)',
+        'fg-strong': 'var(--fg-strong)',
+        'focus-ring': 'var(--focus-ring)',
+        'input-bg': 'var(--input-bg)',
+        'primary-soft': 'var(--primary-soft)',
+        'primary-soft-fg': 'var(--primary-soft-fg)',
+        'primary-accent': 'var(--primary-accent)',
+        'success-soft': 'var(--success-soft)',
+        'success-soft-fg': 'var(--success-soft-fg)',
+        'warning-soft': 'var(--warning-soft)',
+        'warning-soft-fg': 'var(--warning-soft-fg)',
+        'info-soft': 'var(--info-soft)',
+        'info-soft-fg': 'var(--info-soft-fg)',
+        'peach-soft': 'var(--peach-soft)',
+        'peach-soft-fg': 'var(--peach-soft-fg)',
+        'destructive-soft': 'var(--destructive-soft)',
+        'destructive-soft-fg': 'var(--destructive-soft-fg)',
+        'destructive-solid': 'var(--destructive-solid)',
 
         // Category colors (for badges, icons, cards)
         brand: {

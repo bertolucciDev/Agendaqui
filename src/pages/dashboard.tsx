@@ -13,10 +13,10 @@ import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 export default function DashboardPage() {
   const today = new Date().toISOString().split('T')[0]
   const { user } = useAuth()
-  const { businessId, businesses } = useActiveBusiness()
+  const { businessId, businesses, activeMode } = useActiveBusiness()
 
   const { data: employees = [] } = useQuery({
-    queryKey: ['business-employees', businessId],
+    queryKey: ['business-employees', activeMode, businessId],
     queryFn: () => staffApi.listByBusiness(businessId!),
     enabled: !!businessId,
   })
@@ -26,7 +26,7 @@ export default function DashboardPage() {
   const currentMembershipId = currentMembership?.id
 
   const { data: todayData } = useQuery({
-    queryKey: ['appointments-today', businessId, today],
+    queryKey: ['appointments-today', activeMode, businessId, today],
     queryFn: () =>
       appointmentsApi.listBusiness(businessId!, {
         dateFrom: today,
@@ -50,7 +50,7 @@ export default function DashboardPage() {
       <PageHeader>
         <div>
           <PageTitle>Dashboard</PageTitle>
-          <p className="text-xs text-ink-muted mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('pt-BR', {
               weekday: 'long',
               day: 'numeric',
@@ -153,10 +153,10 @@ function QuickAction({
   color: 'primary' | 'success' | 'accent' | 'warning'
 }) {
   const colorMap = {
-    primary: 'bg-primary-50 text-primary-600 hover:bg-primary-100 border-primary-100',
-    success: 'bg-success-50 text-green-600 hover:bg-success-100 border-success-100',
-    accent: 'bg-accent text-accent-foreground hover:bg-accent-100 border-accent-100',
-    warning: 'bg-warning-50 text-amber-600 hover:bg-warning-100 border-warning-100',
+      primary: 'bg-primary-soft text-primary-soft-fg hover:border-primary-300 border-primary-100',
+      success: 'bg-success-soft text-success-soft-fg hover:border-success-100 border-success-100',
+      accent: 'bg-accent text-accent-foreground hover:bg-accent-100 border-accent-100',
+      warning: 'bg-warning-soft text-warning-soft-fg hover:border-warning-100 border-warning-100',
   }
 
   return (

@@ -42,13 +42,13 @@ export default function ForgotPasswordPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-50">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-soft">
             <CheckCircle2 className="h-8 w-8 text-green-500" />
           </div>
           <h1 className="mt-6 text-2xl font-bold tracking-tight text-foreground font-display">
             Código enviado!
           </h1>
-          <p className="mt-2 text-sm text-ink-muted">
+          <p className="mt-2 text-sm text-muted-foreground">
             Verifique sua caixa de entrada em{' '}
             <span className="font-medium text-foreground">{email}</span> e use o código
             para redefinir sua senha.
@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
               Redefinir senha
             </Button>
           </Link>
-          <p className="mt-4 text-xs text-ink-faint">
+          <p className="mt-4 text-xs text-muted-foreground">
             Não recebeu? Verifique sua caixa de spam.
           </p>
         </div>
@@ -71,7 +71,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-sm">
         <Link
           to="/login"
-          className="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-foreground"
+          className="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar ao login
@@ -89,7 +89,7 @@ export default function ForgotPasswordPage() {
         <h1 className="text-2xl font-bold tracking-tight text-foreground font-display">
           Esqueceu a senha?
         </h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="mt-2 text-sm text-muted-foreground">
           Informe seu e-mail e enviaremos um código para redefinir sua senha.
         </p>
 

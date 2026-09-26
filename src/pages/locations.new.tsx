@@ -145,7 +145,7 @@ export default function NewLocationPage() {
                     <option value="AT_CUSTOMER">No cliente</option>
                     <option value="BOTH">Ambos</option>
                   </select>
-                  {errors.attendanceType && <p className="mt-1 text-xs text-red-500">{errors.attendanceType.message}</p>}
+                  {errors.attendanceType && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.attendanceType.message}</p>}
                 </div>
 
                 <Button

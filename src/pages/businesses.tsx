@@ -1,29 +1,29 @@
 import { Link } from 'react-router-dom'
 import { Plus, ArrowRight, Building2, MoreVertical, Trash2, CheckCircle2 } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { businessesApi } from '@/services/api/businesses'
-import { setActiveBusinessId, getActiveBusinessId } from '@/lib/business-store'
+import { useSession } from '@/app/providers/session'
+import { useWorkspace } from '@/app/providers/workspace'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 
+const ROLE_LABELS: Record<string, string> = { OWNER: 'Proprietário', MANAGER: 'Gerente', EMPLOYEE: 'Profissional' }
+
 export default function BusinessesPage() {
-  const queryClient = useQueryClient()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
-
-  const { data: businesses = [], isLoading } = useQuery({
-    queryKey: ['businesses'],
-    queryFn: businessesApi.list,
-  })
-
-  const activeId = getActiveBusinessId()
+  // Fonte: contrato /me/session (sem store local, sem businesses[0])
+  const { session, isSessionLoading, refreshSession } = useSession()
+  const { activeBusiness, switchBusiness } = useWorkspace()
+  const businesses = session?.businesses ?? []
+  const activeId = activeBusiness?.id
 
   const deleteMutation = useMutation({
     mutationFn: businessesApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+      refreshSession()
       toast.success('Negócio removido')
     },
     onError: () => toast.error('Erro ao remover negócio'),
@@ -43,7 +43,7 @@ export default function BusinessesPage() {
 
       <PageContent>
         <div className="animate-in">
-          {isLoading ? (
+          {isSessionLoading ? (
             <div className="flex py-16 justify-center">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
@@ -67,20 +67,22 @@ export default function BusinessesPage() {
                 <div key={biz.id} className="card-hover p-5 relative">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
                         <Building2 className="h-5 w-5 text-primary-500" />
                       </div>
 <div>
                       <div className="flex items-center gap-1.5">
                         <h3 className="text-sm font-semibold text-foreground">{biz.name}</h3>
                         {biz.id === activeId && (
-                          <span className="inline-flex items-center gap-1 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-700">
+                          <span className="inline-flex items-center gap-1 rounded bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary-soft-fg">
                             <CheckCircle2 className="h-3 w-3" />
                             Ativo
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-ink-muted">{biz.type === 'COMPANY' ? 'Empresa' : 'Individual'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ROLE_LABELS[biz.memberships[0]?.role] || biz.memberships[0]?.role || 'Membro'}
+                        </p>
                     </div>
                   </div>
                   <div className="relative">
@@ -91,16 +93,15 @@ export default function BusinessesPage() {
                       <MoreVertical className="h-4 w-4" />
                     </button>
                     {menuOpen === biz.id && (
-                      <div className="absolute right-0 top-8 z-10 w-36 rounded-lg border border-warm-200 bg-white shadow-lg">
+                      <div className="absolute right-0 top-8 z-10 w-36 rounded-lg border border-border bg-surface-overlay shadow-lg">
                         {biz.id !== activeId && (
-                          <button
-                            onClick={() => {
-                              setActiveBusinessId(biz.id)
-                              queryClient.invalidateQueries({ queryKey: ['businesses'] })
-                              toast.success('Negócio ativo alterado')
-                              setMenuOpen(null)
-                            }}
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-primary-50"
+                            <button
+                              onClick={() => {
+                                switchBusiness(biz.id)
+                                toast.success('Negócio ativo alterado')
+                                setMenuOpen(null)
+                              }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-primary-soft"
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Tornar ativo
@@ -111,7 +112,7 @@ export default function BusinessesPage() {
                             deleteMutation.mutate(biz.id)
                             setMenuOpen(null)
                           }}
-                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive-50"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive-soft-fg hover:bg-destructive-soft"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Remover
@@ -120,12 +121,9 @@ export default function BusinessesPage() {
                     )}
                   </div>
                   </div>
-                  {biz.description && (
-                    <p className="mt-3 text-xs text-ink-muted line-clamp-2">{biz.description}</p>
-                  )}
-                  {biz.phone && (
-                    <p className="mt-2 text-xs text-ink-faint">{biz.phone}</p>
-                  )}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {biz.memberships.map((m) => ROLE_LABELS[m.role] || m.role).join(' · ')}
+                  </p>
                 </div>
               ))}
             </div>

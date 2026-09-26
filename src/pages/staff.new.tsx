@@ -20,10 +20,10 @@ export default function NewStaffPage() {
   const queryClient = useQueryClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { businessId } = useActiveBusiness()
+  const { businessId, activeMode } = useActiveBusiness()
 
   const { data: locations = [] } = useQuery({
-    queryKey: ['locations', businessId],
+    queryKey: ['locations', activeMode, businessId],
     queryFn: () => locationsApi.list(businessId!),
     enabled: !!businessId,
   })
@@ -93,7 +93,7 @@ export default function NewStaffPage() {
                       <option key={loc.id} value={loc.id}>{loc.name}</option>
                     ))}
                   </select>
-                  {errors.locationId && <p className="mt-1 text-xs text-red-500">{errors.locationId.message}</p>}
+                  {errors.locationId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.locationId.message}</p>}
                 </div>
 
                 <Input
@@ -109,7 +109,7 @@ export default function NewStaffPage() {
                     {(['MANAGER', 'EMPLOYEE'] as const).map((role) => (
                       <label key={role} className="flex-1">
                         <input type="radio" value={role} className="sr-only peer" {...register('role')} />
-                        <div className="cursor-pointer rounded-lg border border-warm-300 p-3 text-center text-sm font-medium transition-all peer-checked:border-primary-400 peer-checked:bg-primary-50 peer-checked:text-primary-700">
+                        <div className="cursor-pointer rounded-lg border border-border-strong p-3 text-center text-sm font-medium transition-all peer-checked:border-primary-400 peer-checked:bg-primary-soft peer-checked:text-primary-soft-fg">
                           {role === 'MANAGER' ? 'Gerente' : 'Funcionário'}
                         </div>
                       </label>

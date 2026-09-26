@@ -19,10 +19,10 @@ export default function StaffPage() {
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [selectedMember, setSelectedMember] = useState<Membership | null>(null)
 
-  const { businessId } = useActiveBusiness()
+  const { businessId, activeMode } = useActiveBusiness()
 
   const { data: staff = [], isLoading } = useQuery({
-    queryKey: ['staff', businessId],
+    queryKey: ['staff', activeMode, businessId],
     queryFn: () => staffApi.listByBusiness(businessId!),
     enabled: !!businessId,
   })
@@ -96,12 +96,12 @@ export default function StaffPage() {
                   <div key={member.id} className="card-hover p-5 relative">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-50 text-sm font-bold text-amber-600">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-soft text-sm font-bold text-warning-soft-fg">
                           {member.user?.name?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div>
                             <h2 className="text-sm font-semibold text-foreground">{member.user?.name || 'Sem nome'}</h2>
-                          <p className="text-xs text-ink-muted">{member.position || roleLabels[member.role] || member.role}</p>
+                          <p className="text-xs text-muted-foreground">{member.position || roleLabels[member.role] || member.role}</p>
                         </div>
                       </div>
                       <div className="relative">
@@ -113,14 +113,14 @@ export default function StaffPage() {
                           <MoreVertical className="h-4 w-4" />
                         </button>
                         {menuOpen === member.id && (
-                          <div className="absolute right-0 top-8 z-10 w-40 rounded-lg border border-warm-200 bg-white shadow-lg">
+                          <div className="absolute right-0 top-8 z-10 w-40 rounded-lg border border-border bg-surface-overlay shadow-lg">
                             <button
                               onClick={() => {
                                 toggleActiveMutation.mutate({ id: member.id, active: !member.active })
                                 setMenuOpen(null)
                               }}
                               disabled={member.userId === user?.id}
-                              className="flex w-full items-center gap-2 rounded-t-lg px-3 py-2 text-sm text-foreground hover:bg-warm-50 disabled:opacity-40"
+                              className="flex w-full items-center gap-2 rounded-t-lg px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-40"
                             >
                               <Power className="h-3.5 w-3.5" />
                               {member.active ? 'Desativar' : 'Ativar'}
@@ -131,7 +131,7 @@ export default function StaffPage() {
                                 setMenuOpen(null)
                               }}
                               disabled={member.userId === user?.id}
-                              className="flex w-full items-center gap-2 rounded-b-lg px-3 py-2 text-sm text-destructive hover:bg-destructive-50 disabled:opacity-40"
+                              className="flex w-full items-center gap-2 rounded-b-lg px-3 py-2 text-sm text-destructive-soft-fg hover:bg-destructive-soft disabled:opacity-40"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                               Remover

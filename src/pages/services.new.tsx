@@ -66,7 +66,7 @@ export default function NewServicePage() {
         <div className="animate-in mx-auto max-w-lg">
           <Card>
             <div className="flex justify-center mb-4 pt-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-success-50 mx-auto">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-success-soft mx-auto">
                 <Scissors className="h-8 w-8 text-green-500" />
               </div>
             </div>
@@ -90,7 +90,7 @@ export default function NewServicePage() {
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
-                  {errors.categoryId && <p className="mt-1 text-xs text-red-500">{errors.categoryId.message}</p>}
+                  {errors.categoryId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.categoryId.message}</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

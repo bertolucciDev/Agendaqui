@@ -91,13 +91,13 @@ export default function VerifyEmailPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-50">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-soft">
             <CheckCircle2 className="h-8 w-8 text-green-500" />
           </div>
           <h1 className="mt-6 text-2xl font-bold tracking-tight text-foreground font-display">
             E-mail verificado!
           </h1>
-          <p className="mt-2 text-sm text-ink-muted">
+          <p className="mt-2 text-sm text-muted-foreground">
             {user
               ? 'Sua conta está ativa. Acesse seu painel.'
               : 'Sua conta está pronta. Faça login para continuar.'}
@@ -115,7 +115,7 @@ export default function VerifyEmailPage() {
       <div className="w-full max-w-sm">
         <Link
           to={user ? '/dashboard' : '/register'}
-          className="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-foreground"
+          className="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar
@@ -133,7 +133,7 @@ export default function VerifyEmailPage() {
         <h1 className="text-2xl font-bold tracking-tight text-foreground font-display">
           Verificar e-mail
         </h1>
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="mt-2 text-sm text-muted-foreground">
           Digite o código de 6 dígitos enviado para{' '}
           <span className="font-medium text-foreground">{email || 'seu e-mail'}</span>
         </p>
@@ -153,11 +153,11 @@ export default function VerifyEmailPage() {
                 onPaste={handlePaste}
                 disabled={isLoading}
                 className={cn(
-                  'h-12 w-12 rounded-lg border bg-white text-center text-lg font-semibold text-foreground shadow-xs transition-all duration-150',
+                  'h-12 w-12 rounded-lg border bg-input-bg text-center text-lg font-semibold text-foreground shadow-xs transition-all duration-150',
                   'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15',
                   'disabled:opacity-50',
                   'sm:h-14 sm:w-14 sm:text-xl',
-                  digit ? 'border-primary' : 'border-warm-200'
+                  digit ? 'border-primary' : 'border-border'
                 )}
               />
             ))}
@@ -173,7 +173,7 @@ export default function VerifyEmailPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-ink-muted">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           Não recebeu o código? Verifique sua caixa de spam ou{' '}
           <Link to="/register" className="font-semibold text-primary-600 hover:text-primary-700">
             crie uma nova conta
