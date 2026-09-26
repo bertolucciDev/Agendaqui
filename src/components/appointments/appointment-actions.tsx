@@ -152,14 +152,14 @@ export function AppointmentActions({
       </div>
 
       {cancelling && (
-        <div className="rounded-lg border border-warm-200 bg-warm-50 p-3 space-y-2">
+        <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
           <label className="label">Motivo do cancelamento *</label>
           <textarea
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
             rows={2}
             placeholder="Ex.: cliente desistiu, falta de profissional..."
-            className="block w-full rounded-lg border border-warm-200 bg-white px-3 py-2 text-sm text-foreground placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+            className="block w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
           />
           <div className="flex gap-2">
             <Button

@@ -11,16 +11,16 @@ interface StatCardProps {
 }
 
 const colorMap = {
-  primary: { bg: 'bg-primary-50', icon: 'text-primary-500' },
-  success: { bg: 'bg-success-50', icon: 'text-green-500' },
+  primary: { bg: 'bg-primary-soft', icon: 'text-primary-accent' },
+  success: { bg: 'bg-success-soft', icon: 'text-green-500' },
   accent: { bg: 'bg-accent', icon: 'text-accent-500' },
-  warning: { bg: 'bg-warning-50', icon: 'text-amber-500' },
+  warning: { bg: 'bg-warning-soft', icon: 'text-amber-500' },
 }
 
 const trendConfig = {
-  up: { icon: TrendingUp, color: 'text-green-600', bg: 'bg-success-50' },
-  down: { icon: TrendingDown, color: 'text-destructive', bg: 'bg-destructive-50' },
-  neutral: { icon: Minus, color: 'text-ink-faint', bg: 'bg-warm-100' },
+  up: { icon: TrendingUp, color: 'text-success-soft-fg', bg: 'bg-success-soft' },
+  down: { icon: TrendingDown, color: 'text-destructive-soft-fg', bg: 'bg-destructive-soft' },
+  neutral: { icon: Minus, color: 'text-muted-foreground', bg: 'bg-muted' },
 }
 
 export function StatCard({ icon: Icon, label, value, trend = 'neutral', trendValue, color }: StatCardProps) {
@@ -42,7 +42,7 @@ export function StatCard({ icon: Icon, label, value, trend = 'neutral', trendVal
         )}
       </div>
       <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">{value}</p>
-      <p className="mt-0.5 text-xs text-ink-muted">{label}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
     </div>
   )
 }

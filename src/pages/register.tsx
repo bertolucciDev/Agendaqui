@@ -64,14 +64,14 @@ export default function RegisterPage() {
         </aside>
 
         {/* Right panel - form */}
-        <main className="flex-1 flex items-center justify-center p-8 bg-white">
+        <main className="flex-1 flex items-center justify-center p-8 bg-surface">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
             <Link to="/" className="text-lg font-bold text-primary-600 font-display">Agendaqui</Link>
           </div>
 
           <h1 className="text-2xl font-bold text-foreground font-display">Criar conta</h1>
-          <p className="mt-1.5 text-sm text-ink-muted">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Já tem conta?{' '}
             <Link to="/login" className="text-primary-600 font-medium hover:text-primary-700">
               Fazer login
@@ -129,7 +129,7 @@ export default function RegisterPage() {
                   type="button"
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink-muted"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>

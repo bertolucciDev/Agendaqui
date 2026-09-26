@@ -62,7 +62,7 @@ export function AuthModal({ open, onClose, onAuthenticated }: AuthModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-scrim)] p-4 backdrop-blur-sm">
       <div className="card w-full max-w-sm p-6 animate-in-scale">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-foreground font-display">
@@ -73,7 +73,7 @@ export function AuthModal({ open, onClose, onAuthenticated }: AuthModalProps) {
           </button>
         </div>
 
-        <div className="flex rounded-lg border border-warm-200 mb-5">
+        <div className="flex rounded-lg border border-border mb-5">
           {(['login', 'register'] as Mode[]).map((m) => (
             <button
               key={m}
@@ -81,7 +81,7 @@ export function AuthModal({ open, onClose, onAuthenticated }: AuthModalProps) {
               className={cn(
                 'flex-1 px-3 py-2 text-sm font-medium transition-colors',
                 m === 'login' ? 'rounded-l-lg' : 'rounded-r-lg',
-                mode === m ? 'bg-primary-50 text-primary-700' : 'text-ink-muted hover:bg-warm-50'
+                mode === m ? 'bg-primary-soft text-primary-soft-fg' : 'text-muted-foreground hover:bg-muted'
               )}
             >
               {m === 'login' ? 'Login' : 'Cadastro'}
@@ -116,7 +116,7 @@ export function AuthModal({ open, onClose, onAuthenticated }: AuthModalProps) {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-7 text-ink-faint hover:text-ink-muted"
+              className="absolute right-3 top-7 text-muted-foreground hover:text-foreground"
               aria-label={showPassword ? 'Esconder senha' : 'Mostrar senha'}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

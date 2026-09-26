@@ -20,22 +20,22 @@ export default function NewAppointmentPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const { businessId } = useActiveBusiness()
+  const { businessId, activeMode } = useActiveBusiness()
 
   const { data: locations = [] } = useQuery({
-    queryKey: ['locations', businessId],
+    queryKey: ['locations', activeMode, businessId],
     queryFn: () => locationsApi.list(businessId!),
     enabled: !!businessId,
   })
 
   const { data: services = [] } = useQuery({
-    queryKey: ['services', businessId],
+    queryKey: ['services', activeMode, businessId],
     queryFn: () => servicesApi.list(businessId!),
     enabled: !!businessId,
   })
 
   const { data: staff = [] } = useQuery({
-    queryKey: ['staff', businessId],
+    queryKey: ['staff', activeMode, businessId],
     queryFn: () => staffApi.listByBusiness(businessId!),
     enabled: !!businessId,
   })
@@ -110,7 +110,7 @@ export default function NewAppointmentPage() {
                       <option key={loc.id} value={loc.id}>{loc.name}</option>
                     ))}
                   </select>
-                  {errors.locationId && <p className="mt-1 text-xs text-red-500">{errors.locationId.message}</p>}
+                  {errors.locationId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.locationId.message}</p>}
                 </div>
 
                 <div>
@@ -125,7 +125,7 @@ export default function NewAppointmentPage() {
                       <option key={svc.id} value={svc.id}>{svc.name}</option>
                     ))}
                   </select>
-                  {errors.serviceId && <p className="mt-1 text-xs text-red-500">{errors.serviceId.message}</p>}
+                  {errors.serviceId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.serviceId.message}</p>}
                 </div>
 
                 <div>

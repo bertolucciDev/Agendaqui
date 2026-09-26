@@ -172,11 +172,11 @@ export default function BookingPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-warm-100">
-            <Calendar className="h-6 w-6 text-ink-faint" aria-hidden="true" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <Calendar className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
           </div>
           <h1 className="mt-4 text-base font-semibold text-foreground font-display">Negócio não encontrado</h1>
-          <p className="mt-1.5 max-w-sm text-sm text-ink-muted">Verifique o link e tente novamente.</p>
+          <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">Verifique o link e tente novamente.</p>
         </div>
       </main>
     )
@@ -185,16 +185,16 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-warm-200 bg-white">
+      <header className="border-b border-border bg-surface">
         <div className="mx-auto max-w-lg px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 text-sm font-bold text-primary-700">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-sm font-bold text-primary-soft-fg">
               {business.name.charAt(0)}
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground font-display">{business.name}</h1>
               {business.description && (
-                <p className="text-xs text-ink-muted">{business.description}</p>
+                <p className="text-xs text-muted-foreground">{business.description}</p>
               )}
             </div>
           </div>
@@ -202,7 +202,7 @@ export default function BookingPage() {
         </header>
 
       {/* Progress */}
-      <section aria-label="Progresso do agendamento" className="border-b border-warm-200 bg-white">
+      <section aria-label="Progresso do agendamento" className="border-b border-border bg-surface">
         <div className="mx-auto max-w-lg px-4 py-3">
           <div className="flex items-center gap-2">
             {STEPS.map((s, i) => (
@@ -213,14 +213,14 @@ export default function BookingPage() {
                     i < currentStep
                       ? 'bg-primary-500 text-white'
                       : i === currentStep
-                      ? 'bg-primary-100 text-primary-700 ring-2 ring-primary-400'
-                      : 'bg-warm-200 text-ink-faint'
+                      ? 'bg-primary-soft text-primary-soft-fg ring-2 ring-primary-400'
+                      : 'bg-border text-muted-foreground'
                   )}
                 >
                   {i < currentStep ? <Check className="h-3.5 w-3.5" /> : i + 1}
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div className={cn('w-6 h-0.5 rounded-full', i < currentStep ? 'bg-primary-500' : 'bg-warm-200')} />
+                  <div className={cn('w-6 h-0.5 rounded-full', i < currentStep ? 'bg-primary-500' : 'bg-border')} />
                 )}
               </div>
             ))}
@@ -243,17 +243,17 @@ export default function BookingPage() {
                 <button
                   key={service.id}
                   onClick={() => handleServiceSelect(service.id)}
-                  className="w-full rounded-xl border border-warm-200 p-4 text-left transition-all hover:border-primary-300 hover:shadow-sm"
+                  className="w-full rounded-xl border border-border p-4 text-left transition-all hover:border-primary-300 hover:shadow-sm"
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-bold text-foreground">{service.name}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Clock className="h-3 w-3 text-ink-muted" />
-                        <span className="text-xs text-ink-muted">{service.durationMinutes}min</span>
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{service.durationMinutes}min</span>
                       </div>
                     </div>
-                    <p className="text-lg font-bold text-primary-600">
+                    <p className="text-lg font-bold text-primary-soft-fg">
                       {formatPrice(service.priceCents)}
                     </p>
                   </div>
@@ -283,7 +283,7 @@ export default function BookingPage() {
                   </div>
                 <div className="grid grid-cols-7 gap-1">
                   {WEEKDAYS.map((d) => (
-                    <div key={d} className="py-1 text-center text-xs text-ink-muted">
+                    <div key={d} className="py-1 text-center text-xs text-muted-foreground">
                       {d}
                     </div>
                   ))}
@@ -302,8 +302,8 @@ export default function BookingPage() {
                             isSelected
                               ? 'bg-primary-500 text-white'
                               : isToday
-                              ? 'bg-primary-50 text-primary-700'
-                              : 'text-foreground hover:bg-warm-100'
+                              ? 'bg-primary-soft text-primary-soft-fg'
+                              : 'text-foreground hover:bg-muted'
                           )}
                         >
                           {d.getDate()}
@@ -323,7 +323,7 @@ export default function BookingPage() {
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
                     </div>
                   ) : slots.length === 0 ? (
-                    <p className="text-sm text-ink-muted text-center py-8">
+                    <p className="text-sm text-muted-foreground text-center py-8">
                       Nenhum horário disponível para esta data.
                     </p>
                   ) : (
@@ -337,8 +337,8 @@ export default function BookingPage() {
                             className={cn(
                               'rounded-lg border p-2 text-sm font-medium transition-all',
                               isSelected
-                                ? 'border-primary-400 bg-primary-50 text-primary-700'
-                                : 'border-warm-200 text-foreground hover:border-primary-300'
+                                ? 'border-primary-400 bg-primary-soft text-primary-soft-fg'
+                                : 'border-border text-foreground hover:border-primary-300'
                             )}
                           >
                             {formatTime(slot.startsAt)}
@@ -368,7 +368,7 @@ export default function BookingPage() {
             <Card>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
                     <Calendar className="h-5 w-5 text-primary-500" />
                   </div>
                   <div>
@@ -379,14 +379,14 @@ export default function BookingPage() {
                         month: 'long',
                       })}
                     </p>
-                    <p className="text-xs text-ink-muted">
+                    <p className="text-xs text-muted-foreground">
                       {selectedSlot && formatTime(selectedSlot)}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-soft">
                     <Clock className="h-5 w-5 text-green-500" />
                   </div>
                   <p className="text-sm text-foreground">
@@ -433,17 +433,17 @@ export default function BookingPage() {
         {/* Step: Success */}
         {currentStep === 3 && (
           <div className="text-center py-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-50 mx-auto">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft mx-auto">
               <Check className="h-8 w-8 text-green-500" />
             </div>
             <h2 className="mt-4 text-xl font-bold text-foreground font-display">Agendamento confirmado!</h2>
-            <p className="mt-2 text-sm text-ink-muted">
+            <p className="mt-2 text-sm text-muted-foreground">
               Você receberá uma confirmação em breve.
             </p>
             <Card className="mt-6 mx-auto max-w-xs">
               <CardContent>
-                <p className="text-xs text-ink-muted">Código do agendamento</p>
-                <p className="text-lg font-bold text-primary-600 mt-1">{bookingId.slice(0, 8).toUpperCase()}</p>
+                <p className="text-xs text-muted-foreground">Código do agendamento</p>
+                <p className="text-lg font-bold text-primary-soft-fg mt-1">{bookingId.slice(0, 8).toUpperCase()}</p>
               </CardContent>
             </Card>
           </div>

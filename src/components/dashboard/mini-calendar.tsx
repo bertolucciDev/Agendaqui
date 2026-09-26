@@ -52,7 +52,7 @@ export function MiniCalendar({ selectedDate, onDateSelect, appointmentDays = [] 
 
       <div className="grid grid-cols-7 gap-0.5">
         {WEEKDAYS.map((day) => (
-          <div key={day} className="py-1 text-center text-xs font-medium text-ink-faint">
+          <div key={day} className="py-1 text-center text-xs font-medium text-muted-foreground">
             {day}
           </div>
         ))}
@@ -71,8 +71,8 @@ export function MiniCalendar({ selectedDate, onDateSelect, appointmentDays = [] 
                 isSelected(day)
                   ? 'bg-brand-500 text-white'
                   : isToday(day)
-                  ? 'bg-brand-50 text-brand-600 font-bold'
-                  : 'text-ink hover:bg-warm-100'
+                  ? 'bg-primary-soft text-primary-accent font-bold'
+                  : 'text-ink hover:bg-muted'
               }`}
             >
               {day}

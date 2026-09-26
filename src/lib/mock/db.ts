@@ -67,17 +67,56 @@ export interface MockWorkingHoursEntry {
   endMinute: number
 }
 
-export interface MockMembership {
-  id: string
-  userId: string
-  businessId: string
-  locationId: string
-  role: 'OWNER' | 'MANAGER' | 'EMPLOYEE'
-  position: string
-  active: boolean
-  user?: MockUser
-  workingHours?: MockWorkingHoursEntry[]
-}
+  export interface MockMembership {
+    id: string
+    userId: string
+    businessId: string
+    locationId: string
+    role: 'OWNER' | 'MANAGER' | 'EMPLOYEE'
+    position: string
+    active: boolean
+    user?: MockUser
+    workingHours?: MockWorkingHoursEntry[]
+  }
+
+  /* ───── CONTRACT FREEZE: GET /me/session (docs/CONTRACT-me-session.md) ───── */
+
+  export interface MockCustomerProfile {
+    id: string
+    userId: string
+    reputation: number
+    strikes: number
+  }
+
+  export type SessionMode = 'OWNER' | 'PROFESSIONAL' | 'CUSTOMER'
+
+  export interface MockSessionPreferences {
+    activeMode: SessionMode | null
+    activeBusinessId: string | null
+  }
+
+  export interface SessionMembershipPayload {
+    id: string
+    role: 'OWNER' | 'MANAGER' | 'EMPLOYEE'
+    locationIds: string[]
+    permissions: string[]
+    active: boolean
+  }
+
+  export interface SessionBusinessPayload {
+    id: string
+    name: string
+    memberships: SessionMembershipPayload[]
+  }
+
+  export interface MeSessionPayload {
+    user: { id: string }
+    availableModes: SessionMode[]
+    businesses: SessionBusinessPayload[]
+    customerProfile: { id: string } | null
+    isPlatformAdmin: boolean
+    preferences: MockSessionPreferences
+  }
 
 export type MockAppointmentStatus =
   | 'PENDING'
@@ -114,10 +153,12 @@ export interface MockDb {
   businesses: MockBusiness[]
   locations: MockLocation[]
   services: MockService[]
-  memberships: MockMembership[]
-  appointments: MockAppointment[]
-  counters: Record<string, number>
-}
+    memberships: MockMembership[]
+    appointments: MockAppointment[]
+    customerProfiles: MockCustomerProfile[]
+    preferences: Record<string, MockSessionPreferences>
+    counters: Record<string, number>
+  }
 
 const STORAGE_KEY = 'agendaqui:mock-db'
 
@@ -184,8 +225,26 @@ function buildSeed(): MockDb {
       emailVerifiedAt: nowIso,
       createdAt: daysAgo(120),
     },
-    {
-      id: 'u_3',
+      {
+        id: 'u_olivia',
+        name: 'Olívia Total',
+        email: 'olivia@agendaqui.app',
+        phone: '(11) 99999-0005',
+        status: 'ACTIVE',
+        emailVerifiedAt: nowIso,
+        createdAt: daysAgo(60),
+      },
+      {
+        id: 'u_cust',
+        name: 'Paulo Cliente',
+        email: 'cliente@agendaqui.app',
+        phone: '(11) 99999-0006',
+        status: 'ACTIVE',
+        emailVerifiedAt: nowIso,
+        createdAt: daysAgo(30),
+      },
+      {
+        id: 'u_3',
       name: 'João Pedro Nascimento',
       email: 'joao.nascimento@barbeariaelite.com',
       phone: '(11) 98888-1103',
@@ -202,24 +261,40 @@ function buildSeed(): MockDb {
     { id: 'cat_saude', name: 'Saúde & Bem-estar', slug: 'saude-bem-estar' },
   ]
 
-  const businesses: MockBusiness[] = [
-    {
-      id: 'biz_demo',
-      name: 'Barbearia Elite',
-      slug: 'barbearia-elite',
-      document: '12345678000190',
-      type: 'COMPANY',
-      categoryId: 'cat_barbearia',
-      description: 'Barbearia tradicional no coração de São Paulo.',
-      phone: '(11) 4002-8922',
-      sellsProducts: true,
-      cancellationPolicyHours: 24,
-      status: 'ACTIVE',
-      timezone: 'America/Sao_Paulo',
-      attendanceType: 'AT_LOCATION',
-      createdAt: daysAgo(120),
-    },
-  ]
+    const businesses: MockBusiness[] = [
+      {
+        id: 'biz_demo',
+        name: 'Barbearia Elite',
+        slug: 'barbearia-elite',
+        document: '12345678000190',
+        type: 'COMPANY',
+        categoryId: 'cat_barbearia',
+        description: 'Barbearia tradicional no coração de São Paulo.',
+        phone: '(11) 4002-8922',
+        sellsProducts: true,
+        cancellationPolicyHours: 24,
+        status: 'ACTIVE',
+        timezone: 'America/Sao_Paulo',
+        attendanceType: 'AT_LOCATION',
+        createdAt: daysAgo(120),
+      },
+      {
+        id: 'biz_spa',
+        name: 'Studio Olivia',
+        slug: 'studio-olivia',
+        document: '98765432000110',
+        type: 'COMPANY',
+        categoryId: 'cat_estetica',
+        description: 'Estúdio de estética e bem-estar (fixture multi-tenant).',
+        phone: '(11) 4002-7788',
+        sellsProducts: false,
+        cancellationPolicyHours: 12,
+        status: 'ACTIVE',
+        timezone: 'America/Sao_Paulo',
+        attendanceType: 'AT_LOCATION',
+        createdAt: daysAgo(60),
+      },
+    ]
 
   const locations: MockLocation[] = [
     {
@@ -243,12 +318,38 @@ function buildSeed(): MockDb {
       timezone: 'America/Sao_Paulo',
       latitude: -23.555594,
       longitude: -46.688735,
-      attendanceType: 'AT_LOCATION',
-      phone: '(11) 4002-1122',
-      status: 'ACTIVE',
-      isHeadquarter: false,
-    },
-  ]
+        attendanceType: 'AT_LOCATION',
+        phone: '(11) 4002-1122',
+        status: 'ACTIVE',
+        isHeadquarter: false,
+      },
+      {
+        id: 'loc_spa_1',
+        businessId: 'biz_spa',
+        name: 'Spa Matriz',
+        address: 'Rua Oscar Freire, 250 - Jardins, São Paulo - SP',
+        timezone: 'America/Sao_Paulo',
+        latitude: -23.562999,
+        longitude: -46.661999,
+        attendanceType: 'AT_LOCATION',
+        phone: '(11) 4002-7788',
+        status: 'ACTIVE',
+        isHeadquarter: true,
+      },
+      {
+        id: 'loc_spa_2',
+        businessId: 'biz_spa',
+        name: 'Spa Vila Olímpia',
+        address: 'Rua Funchal, 100 - Vila Olímpia, São Paulo - SP',
+        timezone: 'America/Sao_Paulo',
+        latitude: -23.595,
+        longitude: -46.686999,
+        attendanceType: 'AT_LOCATION',
+        phone: '(11) 4002-7799',
+        status: 'ACTIVE',
+        isHeadquarter: false,
+      },
+    ]
 
   const services: MockService[] = [
     {
@@ -298,18 +399,30 @@ function buildSeed(): MockDb {
       active: true,
       membershipIds: ['mem_1'],
     },
-    {
-      id: 'srv_5',
-      businessId: 'biz_demo',
-      categoryId: 'cat_estetica',
-      name: 'Hidratação capilar',
-      priceCents: 8000,
-      durationMinutes: 40,
-      description: 'Hidratação profunda com produtos premium.',
-      active: true,
-      membershipIds: ['mem_2'],
-    },
-  ]
+      {
+        id: 'srv_5',
+        businessId: 'biz_demo',
+        categoryId: 'cat_estetica',
+        name: 'Hidratação capilar',
+        priceCents: 8000,
+        durationMinutes: 40,
+        description: 'Hidratação profunda com produtos premium.',
+        active: true,
+        membershipIds: ['mem_2'],
+      },
+      {
+        id: 'srv_spa1',
+        businessId: 'biz_spa',
+        categoryId: 'cat_estetica',
+        name: 'Massagem relaxante',
+        priceCents: 12000,
+        durationMinutes: 60,
+        bufferMinutes: 10,
+        description: 'Massagem de relaxamento completa (fixture multi-tenant).',
+        active: true,
+        membershipIds: ['mem_5'],
+      },
+    ]
 
   const memberships: MockMembership[] = [
     {
@@ -340,19 +453,49 @@ function buildSeed(): MockDb {
       role: 'MANAGER',
       position: 'Gerente',
       active: true,
-      user: users[3],
-    },
-    {
-      id: 'mem_4',
-      userId: 'u_demo',
-      businessId: 'biz_demo',
-      locationId: 'loc_demo',
-      role: 'OWNER',
-      position: 'Proprietária',
-      active: true,
-      user: users[0],
-    },
-  ]
+      user: users.find((u) => u.id === 'u_3'),
+      },
+      {
+        id: 'mem_4',
+        userId: 'u_demo',
+        businessId: 'biz_demo',
+        locationId: 'loc_demo',
+        role: 'OWNER',
+        position: 'Proprietária',
+        active: true,
+        user: users[0],
+      },
+      {
+        id: 'mem_5',
+        userId: 'u_olivia',
+        businessId: 'biz_spa',
+        locationId: 'loc_spa_1',
+        role: 'OWNER',
+        position: 'Proprietária',
+        active: true,
+        user: users.find((u) => u.id === 'u_olivia'),
+      },
+      {
+        id: 'mem_6',
+        userId: 'u_olivia',
+        businessId: 'biz_demo',
+        locationId: 'loc_2',
+        role: 'EMPLOYEE',
+        position: 'Massoterapeuta convidada',
+        active: true,
+        user: users.find((u) => u.id === 'u_olivia'),
+      },
+      {
+        id: 'mem_7',
+        userId: 'u_olivia',
+        businessId: 'biz_demo',
+        locationId: 'loc_demo',
+        role: 'MANAGER',
+        position: 'Gerente convidada',
+        active: true,
+        user: users.find((u) => u.id === 'u_olivia'),
+      },
+    ]
 
   const clients: { id: string; name: string; phone: string }[] = [
     { id: 'cust_1', name: 'Marcos Paulo', phone: '(11) 97777-0101' },
@@ -410,24 +553,32 @@ function buildSeed(): MockDb {
     }
   })
 
-  return {
-    version: 1,
-    seedDate: toDateKey(now),
-    sessionUserId: 'u_demo',
-    users,
-    categories,
-    businesses,
-    locations,
-    services,
-    memberships,
-    appointments,
-    counters: {
-      biz: 1,
-      loc: 3,
-      mem: 4,
-      u: 4,
-      srv: 6,
-      apt: 10,
+    const customerProfiles: MockCustomerProfile[] = [
+      { id: 'cp_demo', userId: 'u_demo', reputation: 5, strikes: 0 },
+      { id: 'cp_olivia', userId: 'u_olivia', reputation: 5, strikes: 0 },
+      { id: 'cp_cust', userId: 'u_cust', reputation: 5, strikes: 0 },
+    ]
+
+    return {
+      version: 1,
+      seedDate: toDateKey(now),
+      sessionUserId: 'u_demo',
+      users,
+      categories,
+      businesses,
+      locations,
+      services,
+      memberships,
+      appointments,
+      customerProfiles,
+      preferences: {},
+      counters: {
+        biz: 2,
+        loc: 5,
+        mem: 7,
+        u: 6,
+        srv: 6,
+        apt: 10,
       cust: 9,
       cat: 5,
     },
@@ -463,14 +614,17 @@ export function getDb(): MockDb {
   if (stored) {
     try {
       const parsed = JSON.parse(stored) as MockDb
-      if (
-        parsed.seedDate === dateOffsetKey(0) &&
-        Array.isArray(parsed.businesses) &&
-        Array.isArray(parsed.users)
-      ) {
-        memoryDb = parsed
-        return parsed
-      }
+        if (
+          parsed.seedDate === dateOffsetKey(0) &&
+          Array.isArray(parsed.businesses) &&
+          Array.isArray(parsed.users)
+        ) {
+          // normalização: fixtures do contrato MOCK-FIRST podem não existir em DBs antigas
+          if (!Array.isArray(parsed.customerProfiles)) parsed.customerProfiles = []
+          if (!parsed.preferences || typeof parsed.preferences !== 'object') parsed.preferences = {}
+          memoryDb = parsed
+          return parsed
+        }
     } catch {
       // ignore
     }

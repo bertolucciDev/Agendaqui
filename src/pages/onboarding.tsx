@@ -60,7 +60,7 @@ export default function OnboardingPage() {
         })
       }
 
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+      queryClient.invalidateQueries({ queryKey: ['session'] })
       toast.success('Configuração inicial concluída!')
       navigate('/dashboard')
     } catch {

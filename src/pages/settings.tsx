@@ -92,8 +92,8 @@ export default function SettingsPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 whitespace-nowrap ${
                     activeTab === tab.id
-                      ? 'bg-primary-50 text-primary-700 font-semibold'
-                      : 'text-ink-muted hover:bg-warm-50 hover:text-foreground'
+                      ? 'bg-primary-soft text-primary-soft-fg font-semibold'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
                   <tab.icon className="h-4 w-4" />
@@ -109,13 +109,13 @@ export default function SettingsPage() {
                 <>
                   <div className="card p-6">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-100 text-2xl font-bold text-primary-700">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-soft text-2xl font-bold text-primary-soft-fg">
                         {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-foreground font-display">{user?.name}</h3>
-                        <p className="text-sm text-ink-muted">{user?.email}</p>
-                        <p className="text-xs text-ink-faint mt-0.5">
+                        <p className="text-sm text-muted-foreground">{user?.email}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           Membro desde{' '}
                           {user?.createdAt
                             ? new Date(user.createdAt).toLocaleDateString('pt-BR', {
@@ -130,12 +130,12 @@ export default function SettingsPage() {
 
                   <div className="card p-6">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
                         <User className="h-5 w-5 text-primary-500" />
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">Informações pessoais</h3>
-                        <p className="text-xs text-ink-muted">Atualize seus dados</p>
+                        <p className="text-xs text-muted-foreground">Atualize seus dados</p>
                       </div>
                     </div>
 
@@ -184,12 +184,12 @@ export default function SettingsPage() {
                 <>
                   <div className="card p-6">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning-50">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning-soft">
                         <Key className="h-5 w-5 text-amber-500" />
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">Alterar senha</h3>
-                        <p className="text-xs text-ink-muted">Mantenha sua conta segura</p>
+                        <p className="text-xs text-muted-foreground">Mantenha sua conta segura</p>
                       </div>
                     </div>
 
@@ -246,11 +246,11 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">Sessões</h3>
-                        <p className="text-xs text-ink-muted">Gerencie seus dispositivos conectados</p>
+                        <p className="text-xs text-muted-foreground">Gerencie seus dispositivos conectados</p>
                       </div>
                     </div>
 
-                    <p className="text-sm text-ink-muted mb-4">
+                    <p className="text-sm text-muted-foreground mb-4">
                       Encerrar todas as sessões em outros dispositivos. Você permanecerá conectado neste dispositivo.
                     </p>
                     <Button
@@ -269,12 +269,12 @@ export default function SettingsPage() {
               {activeTab === 'notifications' && (
                 <div className="card p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-50">
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-soft">
                       <Bell className="h-5 w-5 text-green-500" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Preferências de notificação</h3>
-                      <p className="text-xs text-ink-muted">Escolha o que deseja receber</p>
+                      <p className="text-xs text-muted-foreground">Escolha o que deseja receber</p>
                     </div>
                   </div>
 
@@ -287,11 +287,11 @@ export default function SettingsPage() {
                     ].map((item, i) => (
                       <label
                         key={i}
-                        className="flex items-center justify-between rounded-xl border border-warm-200 p-4 transition-all hover:border-warm-300"
+                        className="flex items-center justify-between rounded-xl border border-border p-4 transition-all hover:border-border-strong"
                       >
                         <div>
                           <p className="text-sm font-medium text-foreground">{item.label}</p>
-                          <p className="text-xs text-ink-muted">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">{item.description}</p>
                         </div>
                         <div className="relative">
                           <input
@@ -299,7 +299,7 @@ export default function SettingsPage() {
                             defaultChecked={item.enabled}
                             className="peer sr-only"
                           />
-                          <div className="h-6 w-11 rounded-full bg-warm-200 transition-colors peer-checked:bg-primary">
+                          <div className="h-6 w-11 rounded-full bg-border transition-colors peer-checked:bg-primary">
                             <div className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
                           </div>
                         </div>

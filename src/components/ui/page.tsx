@@ -8,7 +8,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ children, className }: PageHeaderProps) {
   return (
-    <header className={cn('flex h-14 items-center justify-between border-b border-warm-200 bg-white px-5', className)}>
+    <header className={cn('flex h-14 items-center justify-between border-b border-border bg-surface px-5', className)}>
       {children}
     </header>
   )

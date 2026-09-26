@@ -14,10 +14,10 @@ export default function ServicesPage() {
   const queryClient = useQueryClient()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
-  const { businessId } = useActiveBusiness()
+  const { businessId, activeMode } = useActiveBusiness()
 
   const { data: services = [], isLoading } = useQuery({
-    queryKey: ['services', businessId],
+    queryKey: ['services', activeMode, businessId],
     queryFn: () => servicesApi.list(businessId!),
     enabled: !!businessId,
   })
@@ -78,7 +78,7 @@ export default function ServicesPage() {
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">{svc.name}</h3>
-                        <p className="text-xs text-ink-muted">{svc.durationMinutes}min</p>
+                        <p className="text-xs text-muted-foreground">{svc.durationMinutes}min</p>
                       </div>
                     </div>
                     <div className="relative">
@@ -89,13 +89,13 @@ export default function ServicesPage() {
                         <MoreVertical className="h-4 w-4" />
                       </button>
                       {menuOpen === svc.id && (
-                        <div className="absolute right-0 top-8 z-10 w-36 rounded-lg border border-warm-200 bg-white shadow-lg">
+                        <div className="absolute right-0 top-8 z-10 w-36 rounded-lg border border-border bg-surface-overlay shadow-lg">
                           <button
                             onClick={() => {
                               deleteMutation.mutate(svc.id)
                               setMenuOpen(null)
                             }}
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive-soft-fg hover:bg-destructive-soft"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             Remover

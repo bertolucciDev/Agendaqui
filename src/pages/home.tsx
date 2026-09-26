@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button'
 
 export default function HomePage() {
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      <header className="flex items-center justify-between border-b border-warm-200 px-5 py-4 lg:px-10">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="flex items-center justify-between border-b border-border px-5 py-4 lg:px-10">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
             A
@@ -26,7 +26,7 @@ export default function HomePage() {
 
       <main className="flex flex-1 flex-col items-center justify-center px-5 py-16 lg:py-24">
         <div className="max-w-3xl text-center">
-          <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700">
+          <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-soft px-3 py-1 text-xs font-medium text-primary-soft-fg">
             <Sparkles className="h-3.5 w-3.5" />
             Plataforma de agendamento
           </div>
@@ -36,7 +36,7 @@ export default function HomePage() {
             <span className="text-primary-600"> simplicidade</span>
           </h1>
 
-          <p className="mt-4 text-lg leading-relaxed text-ink-muted max-w-xl mx-auto">
+          <p className="mt-4 text-lg leading-relaxed text-muted-foreground max-w-xl mx-auto">
             Gerencie negócios, serviços, equipe e agendamentos em um só lugar.
             Uma experiência profissional para você e seus clientes.
           </p>
@@ -80,7 +80,7 @@ export default function HomePage() {
         <div className="mt-20 max-w-2xl">
           <div className="card p-8 text-center">
             <h2 className="text-xl font-bold text-foreground font-display">Pronto para começar?</h2>
-            <p className="mt-2 text-sm text-ink-muted">
+            <p className="mt-2 text-sm text-muted-foreground">
               Crie sua conta gratuita e comece a receber agendamentos hoje mesmo.
             </p>
             <Link to="/register" className="mt-5 inline-flex">
@@ -93,7 +93,7 @@ export default function HomePage() {
         </div>
       </main>
 
-      <footer className="border-t border-warm-200 px-5 py-5 text-center text-xs text-ink-muted">
+      <footer className="border-t border-border px-5 py-5 text-center text-xs text-muted-foreground">
         Agendaqui — Plataforma de agendamento
       </footer>
     </div>
@@ -112,9 +112,9 @@ function Feature({
   color: 'primary' | 'success' | 'accent'
 }) {
   const colorMap = {
-    primary: 'bg-primary-50 text-primary-500',
-    success: 'bg-success-50 text-green-500',
-    accent: 'bg-accent text-accent-500',
+      primary: 'bg-primary-soft text-primary-accent',
+      success: 'bg-success-soft text-green-500',
+      accent: 'bg-accent text-accent-500',
   }
 
   return (
@@ -123,7 +123,7 @@ function Feature({
         <Icon className="h-5 w-5" />
       </div>
       <h3 className="mt-3.5 text-sm font-semibold text-foreground">{title}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
         {description}
       </p>
     </div>
