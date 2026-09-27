@@ -30,7 +30,8 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
 
   if (!session || !needsSelection) return <>{children}</>
 
-  const modes = session.availableModes
+  // MVP administrativo: CUSTOMER permanece no contrato, mas fora da superfície do MVP.
+  const modes = session.availableModes.filter((m) => m !== 'CUSTOMER')
   const effectiveMode = activeMode ?? pickedMode
 
   return (

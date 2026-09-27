@@ -1,7 +1,62 @@
 import { z } from 'zod'
 
-export const loginSchema = z.object({
-  email: z.string().email('E-mail inválido'),
+/* ── FE-MVP-01: validação real de CPF/CNPJ (dígitos verificadores) ── */
+
+const onlyDigits = (v: string) => v.replace(/\D/g, '')
+
+function allSame(d: string): boolean {
+  return /^(\d)\1+$/.test(d)
+}
+
+function dvDigit(base: string, weights: number[]): number {
+  const sum = base.split('').reduce((acc, ch, i) => acc + Number(ch) * weights[i], 0)
+  const mod = (sum % 11)
+  return mod < 2 ? 0 : 11 - mod
+}
+
+export function isValidCpf(value: string): boolean {
+  const d = onlyDigits(value)
+  if (d.length !== 11 || allSame(d)) return false
+  const w1 = [10, 9, 8, 7, 6, 5, 4, 3, 2]
+  const w2 = [11, ...w1]
+  return dvDigit(d.slice(0, 9), w1) === Number(d[9]) && dvDigit(d.slice(0, 10), w2) === Number(d[10])
+}
+
+export function isValidCnpj(value: string): boolean {
+  const d = onlyDigits(value)
+  if (d.length !== 14 || allSame(d)) return false
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+  const w2 = [6, ...w1]
+  return dvDigit(d.slice(0, 12), w1) === Number(d[12]) && dvDigit(d.slice(0, 13), w2) === Number(d[13])
+}
+
+/* Onboarding do primeiro negócio (FE-MVP-01): curto, sem campos sem persistência no backend. */
+export const firstBusinessSchema = z
+  .object({
+    type: z.enum(['COMPANY', 'INDIVIDUAL']),
+    document: z.string().min(1, 'Informe o documento'),
+    name: z.string().min(2, 'Informe o nome do negócio'),
+    categoryId: z.string().min(1, 'Selecione uma categoria'),
+    phone: z
+      .string()
+      .optional()
+      .refine((v) => !v || onlyDigits(v).length >= 10, 'Telefone inválido'),
+    description: z.string().optional(),
+    address: z.string().min(5, 'Informe o endereço'),
+  })
+  .superRefine((data, ctx) => {
+    const digits = onlyDigits(data.document)
+    if (data.type === 'COMPANY' && !isValidCnpj(digits)) {
+      ctx.addIssue({ code: 'custom', path: ['document'], message: 'CNPJ inválido' })
+    }
+    if (data.type === 'INDIVIDUAL' && !isValidCpf(digits)) {
+      ctx.addIssue({ code: 'custom', path: ['document'], message: 'CPF inválido' })
+    }
+  })
+
+export type FirstBusinessFormData = z.infer<typeof firstBusinessSchema>
+
+export const loginSchema = z.object({  email: z.string().email('E-mail inválido'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
 })
 
