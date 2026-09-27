@@ -17,13 +17,16 @@ export interface MockCategory {
   parentId?: string | null
 }
 
-export interface MockBusiness {
-  id: string
-  name: string
-  slug: string
-  document: string
-  type: 'COMPANY' | 'INDIVIDUAL'
-  categoryId: string
+  export interface MockBusiness {
+    id: string
+    name: string
+    slug: string
+    document: string
+    type: 'COMPANY' | 'INDIVIDUAL'
+    categoryId: string
+    /* Paridade com backend: ownership vem de ownerUserId (não de membership OWNER persistida).
+     * Opcional p/ tolerância a DBs antigas em localStorage. */
+    ownerUserId?: string
   description?: string
   phone?: string
   sellsProducts?: boolean
@@ -269,6 +272,7 @@ function buildSeed(): MockDb {
         document: '12345678000190',
         type: 'COMPANY',
         categoryId: 'cat_barbearia',
+        ownerUserId: 'u_demo',
         description: 'Barbearia tradicional no coração de São Paulo.',
         phone: '(11) 4002-8922',
         sellsProducts: true,
@@ -285,6 +289,7 @@ function buildSeed(): MockDb {
         document: '98765432000110',
         type: 'COMPANY',
         categoryId: 'cat_estetica',
+        ownerUserId: 'u_olivia',
         description: 'Estúdio de estética e bem-estar (fixture multi-tenant).',
         phone: '(11) 4002-7788',
         sellsProducts: false,

@@ -3,6 +3,12 @@ import { isMockEnabled, initMock } from '@/lib/mock'
 
 const API_URL = import.meta.env.VITE_API_URL
 
+/* Redirect 401 base-agnóstico: funciona em '/' e em '/agendaqui/' (VITE_BASE_URL). */
+export function resolveLoginUrl(baseUrl: string = import.meta.env.BASE_URL): string {
+  const base = (baseUrl || '/').endsWith('/') ? (baseUrl || '/').slice(0, -1) : baseUrl
+  return `${base}/login`
+}
+
 const mockEnabled = isMockEnabled()
 const mockAdapter = mockEnabled ? initMock() : undefined
 
@@ -66,10 +72,10 @@ apiClient.interceptors.response.use(
         } catch {
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
-          window.location.href = '/agendaqui/login'
+          window.location.href = resolveLoginUrl()
         }
       } else {
-        window.location.href = '/agendaqui/login'
+        window.location.href = resolveLoginUrl()
       }
     }
 

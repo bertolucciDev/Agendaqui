@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSession } from './session'
+import { sessionApi } from '@/services/api/session'
 import type { SessionBusiness, SessionMembership, SessionMode } from '@/types/session'
 
 /**
@@ -139,6 +140,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     void queryClient.invalidateQueries()
   }
 
+  /* Persistência fire-and-forget (PATCH /me/preferences): a UI nunca espera o round-trip.
+   * Falha de persistência NUNCA desfaz o contexto local escolhido — o servidor revalida
+   * contra o catálogo no próximo GET /me/session (preferences stale são tratadas como hint). */
+  const persistPreferences = (patch: { activeMode?: SessionMode | null; activeBusinessId?: string | null }) => {
+    sessionApi.updatePreferences(patch).catch(() => {
+      // intencionalmente silencioso: preferência é UX-only
+    })
+  }
+
   const switchMode = (mode: SessionMode) => {
     if (!availableModes.includes(mode)) return
     // business/location só são válidos se compatíveis com o novo modo
@@ -153,11 +163,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activeBusinessId: keepBusiness ? activeBusiness!.id : null,
       activeLocationId: null,
     })
+    persistPreferences({ activeMode: mode, activeBusinessId: keepBusiness ? activeBusiness!.id : null })
   }
 
   const switchBusiness = (businessId: string) => {
     if (!businessesForMode.some((b) => b.id === businessId)) return
     apply({ activeBusinessId: businessId, activeLocationId: null })
+    persistPreferences({ activeBusinessId: businessId })
   }
 
   const switchLocation = (locationId: string) => {
