@@ -494,6 +494,11 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
         if (!name) throw new ApiError(422, 'name é obrigatório')
         const owner = currentUser()
         if (!owner) throw new ApiError(401, 'Unauthorized')
+        // paridade backend: Business.document é único → 409 em duplicidade (CPF/CNPJ)
+        const docDigits = String(document || '').replace(/\D/g, '')
+        if (docDigits && db.businesses.some((b) => String(b.document).replace(/\D/g, '') === docDigits)) {
+          throw new ApiError(409, 'documento já cadastrado')
+        }
         const businessId = nextId('biz')
         const locationId = nextId('loc')
         const now = new Date().toISOString()

@@ -16,7 +16,8 @@ const MODE_SHORT: Record<SessionMode, string> = { OWNER: 'Gestão', PROFESSIONAL
 function ModeSwitcher() {
   const { session } = useSession()
   const { activeMode, switchMode } = useWorkspace()
-  const modes = session?.availableModes ?? []
+  // MVP administrativo: CUSTOMER permanece no contrato, mas fora da superfície do MVP.
+  const modes = (session?.availableModes ?? []).filter((m) => m !== 'CUSTOMER')
   if (modes.length < 2) return null
   return (
     <div className="mx-3 mt-2">

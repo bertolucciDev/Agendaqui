@@ -4,6 +4,7 @@ import { useAuth } from '@/app/providers/auth'
 import { lazy, Suspense } from 'react'
 import DashboardLayout from '@/components/layout/dashboard-layout'
 import { WorkspaceGate } from '@/components/layout/workspace-gate'
+import { FirstBusinessGuard } from '@/components/layout/first-business-guard'
 
 const HomePage = lazy(() => import('@/pages/home'))
 const LoginPage = lazy(() => import('@/pages/login'))
@@ -23,7 +24,7 @@ const VerifyEmailPage = lazy(() => import('@/pages/verify-email'))
 const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password'))
 const SettingsPage = lazy(() => import('@/pages/settings'))
 const BookingPage = lazy(() => import('@/pages/booking'))
-const OnboardingPage = lazy(() => import('@/pages/onboarding'))
+const OnboardingBusinessPage = lazy(() => import('@/pages/onboarding.business'))
 
 function LoadingFallback() {
   return (
@@ -64,15 +65,17 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
 
-          <Route
-            element={
-              <ProtectedRoute>
-                <WorkspaceGate>
-                  <DashboardLayout />
-                </WorkspaceGate>
-              </ProtectedRoute>
-            }
-          >
+            <Route
+              element={
+                <ProtectedRoute>
+                  <FirstBusinessGuard>
+                    <WorkspaceGate>
+                      <DashboardLayout />
+                    </WorkspaceGate>
+                  </FirstBusinessGuard>
+                </ProtectedRoute>
+              }
+            >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/businesses" element={<BusinessesPage />} />
             <Route path="/businesses/new" element={<BusinessNewPage />} />
@@ -84,8 +87,9 @@ export default function App() {
             <Route path="/staff/new" element={<StaffNewPage />} />
             <Route path="/appointments/new" element={<AppointmentNewPage />} />
             <Route path="/appointments/*" element={<AppointmentsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/onboarding/business" element={<OnboardingBusinessPage />} />
+              <Route path="/onboarding" element={<Navigate to="/onboarding/business" replace />} />
           </Route>
 
           <Route path="/book/:slug" element={<BookingPage />} />
