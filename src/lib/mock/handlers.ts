@@ -11,6 +11,8 @@ import {
   type MockDb,
   type MeSessionPayload,
   type SessionMode,
+  type SessionBusinessPayload,
+  type SessionMembershipPayload,
 } from './db'
 
 export class ApiError extends Error {
@@ -65,41 +67,65 @@ function currentUser() {
 const ROLE_PERMISSIONS: Record<MockMembership['role'], string[]> = {
   OWNER: ['business:manage', 'staff:write', 'services:write', 'appointments:write', 'appointments:read', 'customers:read'],
   MANAGER: ['staff:write', 'services:write', 'appointments:write', 'appointments:read', 'customers:read'],
-  EMPLOYEE: ['appointments:write', 'appointments:read'],
+  EMPLOYEE: ['appointments:write', 'appointments:read', 'customers:read'],
 }
 
-/* Derivação congelada: OWNER/MANAGER ⇒ modo OWNER; EMPLOYEE ⇒ PROFESSIONAL; CustomerProfile ⇒ CUSTOMER */
+/* Derivação congelada: OWNER/MANAGER ⇒ modo OWNER; EMPLOYEE ⇒ PROFESSIONAL; CustomerProfile ⇒ CUSTOMER.
+ * PARIDADE backend: ownership = Business.ownerUserId; se o dono não tem membership real no business,
+ * projeta membership virtual `virtual-owner:<id>` (nunca persistida) com todos os locais ativos. */
 function buildMeSession(db: MockDb, userId: string): MeSessionPayload {
   const memberships = db.memberships.filter((m) => m.userId === userId && m.active)
-  const businesses = db.businesses
-    .filter((b) => memberships.some((m) => m.businessId === b.id))
+  const owned = db.businesses.filter((b) => b.ownerUserId === userId && b.status !== 'INACTIVE')
+  const memberBusinesses = db.businesses.filter((b) => memberships.some((m) => m.businessId === b.id))
+
+  const activeLocationIds = (businessId: string) =>
+    db.locations.filter((l) => l.businessId === businessId && l.status === 'ACTIVE').map((l) => l.id)
+
+  const realPayload = (m: MockMembership): SessionMembershipPayload => ({
+    id: m.id,
+    role: m.role,
+    // OWNER/MANAGER (gestão) enxergam todos os locais ativos do business;
+    // EMPLOYEE fica restrito ao(s) local(is) da própria membership.
+    locationIds:
+      m.role === 'EMPLOYEE' ? (m.locationId ? [m.locationId] : []) : activeLocationIds(m.businessId),
+    permissions: ROLE_PERMISSIONS[m.role],
+    active: m.active,
+  })
+
+  const ownedBusinesses: SessionBusinessPayload[] = owned.map((b) => {
+    const real = memberships.filter((m) => m.businessId === b.id)
+    return {
+      id: b.id,
+      name: b.name,
+      memberships:
+        real.length > 0
+          ? real.map(realPayload)
+          : [
+              {
+                id: `virtual-owner:${b.id}`,
+                role: 'OWNER' as const,
+                locationIds: activeLocationIds(b.id),
+                permissions: ROLE_PERMISSIONS.OWNER,
+                active: true,
+              },
+            ],
+    }
+  })
+
+  const memberOnly = memberBusinesses
+    .filter((b) => !owned.some((o) => o.id === b.id))
     .map((b) => ({
       id: b.id,
       name: b.name,
-      memberships: memberships
-        .filter((m) => m.businessId === b.id)
-        .map((m) => ({
-          id: m.id,
-          role: m.role,
-          // OWNER/MANAGER (gestão) enxergam todos os locais ativos do business;
-          // EMPLOYEE fica restrito ao(s) local(is) da própria membership.
-          locationIds:
-            m.role === 'EMPLOYEE'
-              ? m.locationId
-                ? [m.locationId]
-                : []
-              : db.locations
-                  .filter((l) => l.businessId === b.id && l.status === 'ACTIVE')
-                  .map((l) => l.id),
-          permissions: ROLE_PERMISSIONS[m.role],
-          active: m.active,
-        })),
+      memberships: memberships.filter((m) => m.businessId === b.id).map(realPayload),
     }))
+
+  const businesses = [...ownedBusinesses, ...memberOnly]
 
   const customerProfile = db.customerProfiles.find((c) => c.userId === userId) || null
 
   const availableModes: SessionMode[] = []
-  if (memberships.some((m) => m.role === 'OWNER' || m.role === 'MANAGER')) availableModes.push('OWNER')
+  if (owned.length > 0 || memberships.some((m) => m.role === 'OWNER' || m.role === 'MANAGER')) availableModes.push('OWNER')
   if (memberships.some((m) => m.role === 'EMPLOYEE')) availableModes.push('PROFESSIONAL')
   if (customerProfile) availableModes.push('CUSTOMER')
 
@@ -206,6 +232,44 @@ export function handleRequest(
       const user = currentUser()
       if (!user) throw new ApiError(401, 'Unauthorized')
       return ok(buildMeSession(db, user.id))
+    }
+
+    /* -------- CONTRACT FREEZE: PATCH /me/preferences (semântica = backend, pós P2-A/B) --------
+     * undefined → preservar · valor válido → atualizar · null → limpar.
+     * 400: payload inválido/enum inválido/campo desconhecido (ValidationPipe).
+     * 403: mode indisponível no catálogo / business que não pertence ao usuário. */
+    if (segs[0] === 'me' && segs[1] === 'preferences' && method === 'patch') {
+      const user = currentUser()
+      if (!user) throw new ApiError(401, 'Unauthorized')
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        throw new ApiError(400, 'payload inválido')
+      }
+      const allowed = ['activeMode', 'activeBusinessId']
+      for (const key of Object.keys(body)) {
+        if (!allowed.includes(key)) throw new ApiError(400, `campo desconhecido: ${key}`)
+      }
+      const session = buildMeSession(db, user.id)
+      const current = db.preferences[user.id] || { activeMode: null, activeBusinessId: null }
+      const next: { activeMode: SessionMode | null; activeBusinessId: string | null } = { ...current }
+
+      if ('activeMode' in body) {
+        const v = body.activeMode
+        if (v === null) next.activeMode = null
+        else if (!['OWNER', 'PROFESSIONAL', 'CUSTOMER'].includes(v)) throw new ApiError(400, 'activeMode inválido.')
+        else if (!session.availableModes.includes(v)) throw new ApiError(403, 'Modo não disponível para o usuário.')
+        else next.activeMode = v
+      }
+      if ('activeBusinessId' in body) {
+        const v = body.activeBusinessId
+        if (v === null) next.activeBusinessId = null
+        else if (typeof v !== 'string') throw new ApiError(400, 'activeBusinessId inválido.')
+        else if (!session.businesses.some((b) => b.id === v)) throw new ApiError(403, 'Negócio não pertence ao usuário.')
+        else next.activeBusinessId = v
+      }
+
+      db.preferences[user.id] = next
+      saveDb()
+      return ok(next)
     }
 
   /* ---------------- users ---------------- */
@@ -425,64 +489,57 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
     return paginated(db.businesses, query.get('limit') ?? undefined, query.get('offset') ?? undefined)
   }
 
-if (segs.length === 1 && method === 'post') {
-    const { name, document, type, categoryId, locationName, address, timezone, attendanceType, phone, description } = body || {}
-      if (!name) throw new ApiError(422, 'name é obrigatório')
-      const businessId = nextId('biz')
-      const locationId = nextId('loc')
-      const membershipId = nextId('mem')
-      const now = new Date().toISOString()
-      const business = {
-        id: businessId,
-        name: String(name),
-        slug: slugify(String(name)),
-        document: document || '',
-        type: (type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'COMPANY') as 'COMPANY' | 'INDIVIDUAL',
-        categoryId: categoryId || '',
-        description: description || undefined,
-        phone: phone || undefined,
-        timezone: timezone || 'America/Sao_Paulo',
-        attendanceType: attendanceType || 'AT_LOCATION',
-        status: 'ACTIVE' as const,
-        createdAt: now,
-      }
-      db.businesses.push(business)
-      db.locations.push({
-        id: locationId,
-        businessId,
-        name: locationName || 'Principal',
-        address: address || '',
-        timezone: timezone || 'America/Sao_Paulo',
-        attendanceType: attendanceType || 'AT_LOCATION',
-        phone: phone || null,
-        status: 'ACTIVE',
-        isHeadquarter: true,
-      })
-      const owner = currentUser()
-      db.memberships.push({
-        id: membershipId,
-        userId: owner?.id || 'u_demo',
-        businessId,
-        locationId,
-        role: 'OWNER',
-        position: 'Proprietário',
-        active: true,
-        user: owner || undefined,
-      })
-      saveDb()
-      return {
-        status: 201,
-        body: {
+  if (segs.length === 1 && method === 'post') {
+      const { name, document, type, categoryId, locationName, address, timezone, attendanceType, phone, description } = body || {}
+        if (!name) throw new ApiError(422, 'name é obrigatório')
+        const owner = currentUser()
+        if (!owner) throw new ApiError(401, 'Unauthorized')
+        const businessId = nextId('biz')
+        const locationId = nextId('loc')
+        const now = new Date().toISOString()
+        const business = {
           id: businessId,
+          name: String(name),
+          slug: slugify(String(name)),
+          document: document || '',
+          type: (type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'COMPANY') as 'COMPANY' | 'INDIVIDUAL',
+          categoryId: categoryId || '',
+          /* Backend real: criação marca Business.ownerUserId; NÃO persiste membership OWNER.
+           * A sessão projeta `virtual-owner:<businessId>` a partir da propriedade. */
+          ownerUserId: owner.id,
+          description: description || undefined,
+          phone: phone || undefined,
+          timezone: timezone || 'America/Sao_Paulo',
+          attendanceType: attendanceType || 'AT_LOCATION',
+          status: 'ACTIVE' as const,
+          createdAt: now,
+        }
+        db.businesses.push(business)
+        db.locations.push({
+          id: locationId,
           businessId,
-          locationId,
-          membershipId,
-          slug: business.slug,
-          name: business.name,
-          createdAt: business.createdAt,
-        },
-      }
-  }
+          name: locationName || 'Principal',
+          address: address || '',
+          timezone: timezone || 'America/Sao_Paulo',
+          attendanceType: attendanceType || 'AT_LOCATION',
+          phone: phone || null,
+          status: 'ACTIVE',
+          isHeadquarter: true,
+        })
+        saveDb()
+        return {
+          status: 201,
+          body: {
+            id: businessId,
+            businessId,
+            locationId,
+            membershipId: `virtual-owner:${businessId}`,
+            slug: business.slug,
+            name: business.name,
+            createdAt: business.createdAt,
+          },
+        }
+    }
 
   if (segs.length === 2) {
     const idOrSlug = segs[1]
