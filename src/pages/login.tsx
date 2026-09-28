@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/app/providers/auth'
 import { Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -24,8 +25,11 @@ export default function LoginPage() {
       await login(data.email, data.password)
       toast.success('Login realizado!')
     } catch (err: any) {
-      const msg = err?.response?.data?.message
-      if (msg?.includes('Invalid credentials')) {
+      const msg: string = err?.response?.data?.message ?? ''
+      if (err?.response?.status === 403 && /verifique seu e-mail/i.test(msg)) {
+        toast.error('Verifique seu e-mail antes de fazer login')
+        navigate(`/verify-email?email=${encodeURIComponent(data.email)}`)
+      } else if (msg?.includes('Invalid credentials')) {
         toast.error('E-mail ou senha inválidos')
       } else {
         toast.error('Erro ao fazer login')

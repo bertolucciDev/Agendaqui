@@ -64,7 +64,7 @@ export const registerSchema = z.object({
   name: z.string().min(2, 'Mínimo 2 caracteres'),
   email: z.string().email('E-mail inválido'),
   phone: z.string().optional(),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
+  password: z.string().min(8, 'Mínimo 8 caracteres'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas não conferem',

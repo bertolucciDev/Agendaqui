@@ -15,11 +15,33 @@ export default function VerifyEmailPage() {
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [isVerified, setIsVerified] = useState(false)
+  const [isResending, setIsResending] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
     inputRefs.current[0]?.focus()
   }, [])
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [resendCooldown])
+
+  const handleResend = async () => {
+    if (!email || isResending || resendCooldown > 0) return
+    setIsResending(true)
+    try {
+      await authApi.resendVerificationEmail(email)
+      toast.success('Código reenviado! Verifique seu e-mail.')
+      setResendCooldown(60)
+    } catch {
+      toast.error('Não foi possível reenviar. Tente novamente em instantes.')
+    } finally {
+      setIsResending(false)
+    }
+  }
 
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) value = value.slice(-1)
@@ -175,9 +197,24 @@ export default function VerifyEmailPage() {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Não recebeu o código? Verifique sua caixa de spam ou{' '}
-          <Link to="/register" className="font-semibold text-primary-600 hover:text-primary-700">
-            crie uma nova conta
-          </Link>
+          {email ? (
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={isResending || resendCooldown > 0}
+              className="font-semibold text-primary-600 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resendCooldown > 0
+                ? `Reenviar em ${resendCooldown}s`
+                : isResending
+                  ? 'Reenviando...'
+                  : 'reenviar código'}
+            </button>
+          ) : (
+            <Link to="/register" className="font-semibold text-primary-600 hover:text-primary-700">
+              crie uma nova conta
+            </Link>
+          )}
         </p>
       </div>
     </div>
