@@ -44,6 +44,10 @@ export const authApi = {
     await apiClient.post('auth/verify-email', { email, code })
   },
 
+  resendVerificationEmail: async (email: string) => {
+    await apiClient.post('auth/verify-email/resend', { email })
+  },
+
   setInitialPassword: async (newPassword: string) => {
     await apiClient.post('auth/first-access/set-password', { newPassword })
   },
@@ -73,7 +77,13 @@ export const authApi = {
 
 export const usersApi = {
   create: async (name: string, email: string, password: string, phone?: string) => {
-    await apiClient.post('users', { name, email, password, phone })
+    const { data } = await apiClient.post<{ userId: string; autoVerified: boolean }>('users', {
+      name,
+      email,
+      password,
+      phone,
+    })
+    return data
   },
 
   getById: async (id: string) => {

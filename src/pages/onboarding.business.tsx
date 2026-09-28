@@ -8,7 +8,9 @@ import toast from 'react-hot-toast'
 import { Building2, User } from 'lucide-react'
 import { businessesApi } from '@/services/api/businesses'
 import { categoriesApi } from '@/services/api/categories'
+import { sessionApi } from '@/services/api/session'
 import { useSession } from '@/app/providers/session'
+import type { MeSession } from '@/types/session'
 import { firstBusinessSchema, type FirstBusinessFormData } from '@/lib/validations'
 import { maskCpfCnpj, maskPhone, unmask } from '@/lib/masks'
 import { Button } from '@/components/ui/button'
@@ -76,9 +78,26 @@ export default function OnboardingBusinessPage() {
         description: data.description || undefined,
       })
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       // aguarda o refetch da sessão (novo business no catálogo) antes de navegar
       await queryClient.invalidateQueries({ queryKey: ['session'] })
+      const refreshed = (await queryClient.refetchQueries({ queryKey: ['session'] })) ?? []
+      const newSession = refreshed[0]?.data as MeSession | undefined
+      const ownsNewBusiness = newSession?.businesses.some((b) => b.id === result.id)
+      if (newSession && ownsNewBusiness) {
+        // D8: OWNER auto-selecionado no 1º negócio — sem clique extra no seletor de contexto.
+        // 1) otimista no cache da query (o WorkspaceProvider resolve por preferência válida);
+        queryClient.setQueryData<MeSession>(['session'], {
+          ...newSession,
+          preferences: { activeMode: 'OWNER', activeBusinessId: result.id },
+        })
+        // 2) fire-and-forget no servidor; falha nunca bloqueia o navegar (revalida no próximo GET)
+        sessionApi
+          .updatePreferences({ activeMode: 'OWNER', activeBusinessId: result.id })
+          .catch(() => {
+            // intencionalmente silencioso: preferência é UX-only
+          })
+      }
       toast.success('Negócio criado! Bem-vindo(a).')
       navigate('/dashboard')
     },

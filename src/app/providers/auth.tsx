@@ -15,7 +15,7 @@ interface AuthContextType {
   isEmailVerified: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<{ user: User }>
-  register: (name: string, email: string, password: string, phone?: string) => Promise<void>
+  register: (name: string, email: string, password: string, phone?: string) => Promise<{ autoVerified: boolean }>
   logout: () => Promise<void>
   updateUser: (data: Partial<User>) => void
 }
@@ -52,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(async (name: string, email: string, password: string, phone?: string) => {
-    await usersApi.create(name, email, password, phone)
+    const result = await usersApi.create(name, email, password, phone)
+    return { autoVerified: result.autoVerified }
   }, [])
     const logout = useCallback(async () => {
     try {

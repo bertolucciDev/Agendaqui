@@ -24,12 +24,17 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFormData) => {
     setIsSubmitting(true)
     try {
-      await registerUser(data.name, data.email, data.password, data.phone)
-      toast.success('Conta criada!')
-      navigate('/login')
+      const { autoVerified } = await registerUser(data.name, data.email, data.password, data.phone)
+      if (autoVerified) {
+        // A2: conta pendente re-registrada com a mesma senha — já está verificada.
+        toast.success('E-mail confirmado! Faça login.')
+        navigate('/login')
+        return
+      }
+      toast.success('Conta criada! Verifique seu e-mail.')
+      navigate(`/verify-email?email=${encodeURIComponent(data.email)}`)
     } catch (err: any) {
-      const msg = err?.response?.data?.message
-      if (msg?.includes('already exists')) {
+      if (err?.response?.status === 409) {
         toast.error('E-mail já cadastrado')
       } else {
         toast.error('Erro ao criar conta')
@@ -121,7 +126,7 @@ export default function RegisterPage() {
                 <Input
                   type={showPassword ? 'text' : 'password'}
                   className="pr-10"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   error={errors.password?.message}
                   {...register('password')}
                 />
