@@ -25,6 +25,7 @@ const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password'))
 const SettingsPage = lazy(() => import('@/pages/settings'))
 const BookingPage = lazy(() => import('@/pages/booking'))
 const OnboardingBusinessPage = lazy(() => import('@/pages/onboarding.business'))
+const OnboardingBusinessVerificationPage = lazy(() => import('@/pages/onboarding.business-verification'))
 
 function LoadingFallback() {
   return (
@@ -89,6 +90,11 @@ export default function App() {
             <Route path="/appointments/*" element={<AppointmentsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/onboarding/business" element={<OnboardingBusinessPage />} />
+              {/* Acompanhamento sob /onboarding* — FirstBusinessGuard é congelado. */}
+              <Route
+                path="/onboarding/business-verification"
+                element={<OnboardingBusinessVerificationPage />}
+              />
               <Route path="/onboarding" element={<Navigate to="/onboarding/business" replace />} />
           </Route>
 
