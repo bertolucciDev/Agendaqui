@@ -1,18 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AxiosError } from 'axios'
-import toast from 'react-hot-toast'
-import { Building2, User } from 'lucide-react'
-import { businessesApi } from '@/services/api/businesses'
+import { Building2, User, Loader2 } from 'lucide-react'
 import { categoriesApi } from '@/services/api/categories'
-import { sessionApi } from '@/services/api/session'
 import { useSession } from '@/app/providers/session'
-import type { MeSession } from '@/types/session'
-import { firstBusinessSchema, type FirstBusinessFormData } from '@/lib/validations'
+import {
+  useBusinessVerificationFlow,
+  verificationPermissions,
+} from '@/hooks/use-business-verification-flow'
+import { useBusinessVerification } from '@/hooks/use-business-verification'
 import { maskCpfCnpj, maskPhone, unmask } from '@/lib/masks'
+import { isEmpty } from '@/lib/verification/permissions'
+import {
+  DOCUMENT_HINTS,
+  DOCUMENT_LABELS,
+  documentTypesFor,
+  isDocumentRequired,
+  isDocumentSubmitted,
+} from '@/lib/verification/document-rules'
+import type { DocumentUploadPhase } from '@/lib/verification/upload-document'
+import type { CreateVerificationPayload } from '@/services/api/business-verification'
+import type {
+  BusinessVerification,
+  BusinessVerificationBusinessType,
+} from '@/types/business-verification'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -20,226 +34,481 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { cn } from '@/lib/utils'
 
 /**
- * FE-MVP-01 — Onboarding do PRIMEIRO negócio (primeiro acesso administrativo).
- * Distinto de /businesses/new (criação posterior dentro do ambiente administrativo).
- * Usa somente campos suportados pelo POST /businesses atual (sem razão social/nome fantasia —
- * campos inexistentes no backend não aparecem aqui; upload de documentos fora de escopo).
- * Após criar: invalida ['session'] (aguarda refetch) e navega ao dashboard.
+ * FE-MVP-01 — Onboarding do PRIMEIRO negócio, agora via Business Verification.
+ *
+ * ANTES: POST /businesses (endpoint removido — responde 410, decisão B-1).
+ * AGORA: FirstBusinessGuard → verificação em DRAFT → documentos → submit → PENDING.
+ *
+ * O formulário valida apenas o que é digitável (zod). Coerência
+ * tipo↔documento, obrigatoriedade de documentos, limite de tentativas e
+ * expiração são do backend: aqui consumimos apenas o contrato — `status`,
+ * `canResubmit`, `requiredDocumentTypes` e `missingDocumentTypes` — e as
+ * permissões de tela são derivadas em `lib/verification/permissions.ts`.
+ *
+ * Quando a verificação chega a APPROVED, o hook `useBusinessVerification`
+ * (D8, já validado em T1–T9) assume: refaz a sessão e dispara a preferência.
+ * Esta tela apenas redireciona para o dashboard.
  */
+
+const formSchema = z.object({
+  businessType: z.enum(['COMPANY', 'INDIVIDUAL']),
+  tradeName: z.string().min(2, 'Informe o nome do negócio'),
+  document: z.string().min(1, 'Informe o documento'),
+  categoryId: z.string().min(1, 'Selecione uma categoria'),
+  legalName: z.string().optional(),
+  responsibleName: z.string().optional(),
+  phone: z
+    .string()
+    .optional()
+    .refine((v) => !v || unmask(v).length >= 10, 'Telefone inválido'),
+})
+
+type FormData = z.infer<typeof formSchema>
+
+const UPLOAD_COPY: Record<DocumentUploadPhase, string> = {
+  idle: 'Não enviado',
+  presigned: 'Preparando envio',
+  uploading: 'Enviando',
+  uploaded: 'Enviado — validando',
+  completed: 'Concluído',
+  error: 'Erro no envio',
+}
+
 export default function OnboardingBusinessPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { session } = useSession()
+  const { session, refreshSession } = useSession()
+  const flow = useBusinessVerificationFlow()
+
   const [step, setStep] = useState<'type' | 'form'>('type')
   const [documentDisplay, setDocumentDisplay] = useState('')
   const [phoneDisplay, setPhoneDisplay] = useState('')
+  const hydratedFor = useRef<string | null>(null)
 
-  // sessão carregada com business administrativo → primeiro acesso já resolvido
   const alreadyHasBusiness = !!session && session.businesses.length > 0
-
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: categoriesApi.list,
+    staleTime: 300_000,
   })
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
     setValue,
-    setError,
     watch,
-  } = useForm<FirstBusinessFormData>({
-    resolver: zodResolver(firstBusinessSchema),
-    defaultValues: { type: 'COMPANY' },
+    formState: { errors },
+  } = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      businessType: 'COMPANY',
+      tradeName: '',
+      document: '',
+      categoryId: '',
+      legalName: '',
+      responsibleName: '',
+      phone: '',
+    },
   })
 
-  const type = watch('type')
+  // A leitura é do hook compartilhado (mesma chave de query do D8): uma única
+  // fonte, sem polling concorrente.
+  const { verification: rawVerification, isLoading, error, refetch } = useBusinessVerification()
 
-  // campos mascarados são controlados por estado local — registrar explicitamente no RHF
+  // `GET /me/business-verification` responde 200 com o output vazio
+  // (`verificationId: null`) quando não existe solicitação. Isso NÃO é uma
+  // verificação: tratar como tal faria a tela tentar PATCH em um DRAFT
+  // inexistente em vez de criar um novo.
+  const verification = isEmpty(rawVerification) ? null : rawVerification
+
+  const selectedType = watch('businessType')
+  // Verificação existente manda no tipo; senão vale a escolha da tela.
+  const businessType: BusinessVerificationBusinessType =
+    verification?.businessType ?? selectedType
+  const status = verification?.status
+  const { mayUpload, maySubmit } = verificationPermissions(verification)
+
+  // DRAFT existente é preservado e hidratado uma única vez (evita sobrescrever
+  // o que o usuário está digitando com um refetch).
   useEffect(() => {
-    register('type')
-    register('document')
-    register('phone')
-  }, [register])
+    if (!verification) return
+    if (hydratedFor.current === verification.verificationId) return
+    hydratedFor.current = verification.verificationId
+    setValue('businessType', verification.businessType ?? 'COMPANY')
+    setValue('tradeName', verification.tradeName ?? '')
+    setValue('document', verification.document ?? '')
+    setValue('categoryId', verification.categoryId ?? '')
+    setValue('legalName', verification.legalName ?? '')
+    setValue('responsibleName', verification.responsibleName ?? '')
+    setValue('phone', verification.phone ?? '')
+    setDocumentDisplay(maskCpfCnpj(verification.document ?? ''))
+    setPhoneDisplay(maskPhone(verification.phone ?? ''))
+    if (verification.businessType) setStep('form')
+  }, [setValue, verification])
 
-  const createMutation = useMutation({
-    mutationFn: async (data: FirstBusinessFormData) => {
-      return businessesApi.create({
-        name: data.name,
-        document: unmask(data.document),
-        type: data.type,
-        categoryId: data.categoryId,
-        locationName: 'Principal',
-        address: data.address,
-        timezone: 'America/Sao_Paulo',
-        attendanceType: 'AT_LOCATION',
-        phone: data.phone ? unmask(data.phone) : undefined,
-        description: data.description || undefined,
-      })
-    },
-    onSuccess: async (result) => {
-      // aguarda o refetch da sessão (novo business no catálogo) antes de navegar
-      await queryClient.invalidateQueries({ queryKey: ['session'] })
-      const refreshed = (await queryClient.refetchQueries({ queryKey: ['session'] })) ?? []
-      const newSession = refreshed[0]?.data as MeSession | undefined
-      const ownsNewBusiness = newSession?.businesses.some((b) => b.id === result.id)
-      if (newSession && ownsNewBusiness) {
-        // D8: OWNER auto-selecionado no 1º negócio — sem clique extra no seletor de contexto.
-        // 1) otimista no cache da query (o WorkspaceProvider resolve por preferência válida);
-        queryClient.setQueryData<MeSession>(['session'], {
-          ...newSession,
-          preferences: { activeMode: 'OWNER', activeBusinessId: result.id },
-        })
-        // 2) fire-and-forget no servidor; falha nunca bloqueia o navegar (revalida no próximo GET)
-        sessionApi
-          .updatePreferences({ activeMode: 'OWNER', activeBusinessId: result.id })
-          .catch(() => {
-            // intencionalmente silencioso: preferência é UX-only
-          })
-      }
-      toast.success('Negócio criado! Bem-vindo(a).')
-      navigate('/dashboard')
-    },
-    onError: (err) => {
-      const status = err instanceof AxiosError ? err.response?.status : undefined
-      if (status === 409) {
-        setError('document', { message: 'Este documento já está cadastrado.' })
-      } else if (status === 400) {
-        toast.error('Verifique os dados informados e tente novamente.')
-      } else {
-        toast.error('Não foi possível criar o negócio agora. Tente novamente.')
-      }
-    },
-  })
+  // APPROVED: o D8 já executou (o hook dispara ao observar APPROVED). Aqui só
+  // garantimos a sessão fresca e seguimos ao dashboard. A rota de
+  // acompanhamento é quem mostra o estado intermediário.
+  useEffect(() => {
+    if (status !== 'APPROVED') return
+    void refetch()
+    refreshSession()
+    void queryClient.invalidateQueries({ queryKey: ['session'] })
+    navigate('/dashboard', { replace: true })
+  }, [navigate, queryClient, refreshSession, refetch, status])
 
-  const chooseType = (t: 'COMPANY' | 'INDIVIDUAL') => {
-    setValue('type', t)
-    setDocumentDisplay('')
-    setValue('document', '')
-    setStep('form')
-  }
+  // Estados que não são de preenchimento vão para a tela de acompanhamento.
+  useEffect(() => {
+    if (status === 'PENDING' || status === 'EXPIRED' || status === 'CANCELLED' || status === 'REJECTED') {
+      navigate('/onboarding/business-verification', { replace: true })
+    }
+  }, [navigate, status])
 
-  const handleDocumentChange = (value: string) => {
-    const max = type === 'COMPANY' ? 18 : 14
-    const masked = maskCpfCnpj(value).slice(0, max)
-    setDocumentDisplay(masked)
-    setValue('document', masked, { shouldValidate: false })
-  }
+  if (alreadyHasBusiness) return <Navigate to="/dashboard" replace />
 
-  if (alreadyHasBusiness) {
-    return <Navigate to="/dashboard" replace />
-  }
-
-  if (step === 'type') {
+  if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md">
-          <h1 className="text-xl font-bold text-foreground font-display">Como seu negócio está registrado?</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Vamos configurar seu primeiro negócio. Leva menos de um minuto.
-          </p>
-          <div className="mt-6 space-y-3" role="radiogroup" aria-label="Tipo de registro">
-            <button
-              type="button"
-              data-testid="pick-cnpj"
-              onClick={() => chooseType('COMPANY')}
-              className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-all hover:border-border-strong"
-            >
-              <Building2 className="h-5 w-5 text-primary" />
-              <span>
-                <span className="block text-sm font-semibold text-foreground">CNPJ</span>
-                <span className="block text-xs text-muted-foreground">Empresa registrada</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              data-testid="pick-cpf"
-              onClick={() => chooseType('INDIVIDUAL')}
-              className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-all hover:border-border-strong"
-            >
-              <User className="h-5 w-5 text-primary" />
-              <span>
-                <span className="block text-sm font-semibold text-foreground">CPF</span>
-                <span className="block text-xs text-muted-foreground">Profissional autônomo / negócio individual</span>
-              </span>
-            </button>
-          </div>
-        </div>
-      </main>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+      </div>
     )
   }
 
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Não foi possível carregar sua solicitação</CardTitle>
+            <CardDescription>{error.message}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => void refetch()}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+
+  const submitForm = handleSubmit(async (values) => {
+    const payload: CreateVerificationPayload = {
+      businessType: values.businessType,
+      // DTO exige dígitos crus; a máscara é só apresentação.
+      document: unmask(values.document),
+      tradeName: values.tradeName.trim(),
+      categoryId: values.categoryId,
+      ...(values.legalName ? { legalName: values.legalName.trim() } : {}),
+      ...(values.responsibleName ? { responsibleName: values.responsibleName.trim() } : {}),
+      ...(values.phone ? { phone: unmask(values.phone) } : {}),
+    }
+
+    // DRAFT existente é PRESERVADO: `update` (PATCH) em vez de `create` (POST).
+    const saved = verification ? await flow.update(payload) : await flow.create(payload)
+    if (saved) setStep('form')
+  })
+
   return (
-    <main className="mx-auto w-full max-w-lg px-6 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Primeiro negócio — {type === 'COMPANY' ? 'CNPJ' : 'CPF'}</CardTitle>
-          <CardDescription>Preencha os dados do seu negócio e da unidade principal.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className={cn('space-y-4')}>
-            <Input
-              label={type === 'COMPANY' ? 'CNPJ' : 'CPF'}
-              inputMode="numeric"
-              placeholder={type === 'COMPANY' ? '00.000.000/0000-00' : '000.000.000-00'}
-              value={documentDisplay}
-              onChange={(e) => handleDocumentChange(e.target.value)}
-              error={errors.document?.message}
-            />
-            <Input
-              label="Nome do negócio"
-              placeholder="Ex.: Barbearia do Zé"
-              error={errors.name?.message}
-              {...register('name')}
-            />
-            <div>
-              <label className="label">Categoria</label>
-              <Select
-                options={categories.map((c) => ({ value: c.id, label: c.name }))}
-                placeholder="Selecione uma categoria"
-                error={errors.categoryId?.message}
-                {...register('categoryId')}
-              />
-              {errors.categoryId?.message && (
-                <p className="mt-1 text-xs text-destructive-soft-fg">{errors.categoryId.message}</p>
-              )}
-            </div>
-            <Input
-              label="Telefone (opcional)"
-              inputMode="numeric"
-              placeholder="(11) 99999-9999"
-              value={phoneDisplay}
-              onChange={(e) => {
-                const m = maskPhone(e.target.value)
-                setPhoneDisplay(m)
-                setValue('phone', m, { shouldValidate: false })
+    <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 bg-background px-4 py-10">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">Verificação do negócio</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Precisamos validar seus documentos antes de liberar o ambiente administrativo.
+        </p>
+      </div>
+
+      {step === 'type' && !verification ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Como seu negócio está registrado?</CardTitle>
+            <CardDescription>Isso define quais documentos serão exigidos.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <TypeOption
+              testId="pick-cnpj"
+              title="CNPJ — Pessoa jurídica"
+              description="Empresa, MEI ou prestador com CNPJ."
+              icon={<Building2 className="h-5 w-5" />}
+              onClick={() => {
+                setStep('form')
+                setDocumentDisplay('')
+                setValue('businessType', 'COMPANY')
               }}
-              error={errors.phone?.message}
             />
-            <Input
-              label="Descrição (opcional)"
-              placeholder="Ex.: Cortes clássicos e barba"
-              error={errors.description?.message}
-              {...register('description')}
+            <TypeOption
+              testId="pick-cpf"
+              title="CPF — Pessoa física"
+              description="Profissional autônomo sem CNPJ."
+              icon={<User className="h-5 w-5" />}
+              onClick={() => {
+                setStep('form')
+                setDocumentDisplay('')
+                setValue('businessType', 'INDIVIDUAL')
+              }}
             />
-            <Input
-              label="Endereço da unidade principal"
-              placeholder="Rua, número, bairro, cidade - UF"
-              error={errors.address?.message}
-              {...register('address')}
-            />
-            <div className="flex items-center justify-between pt-2">
-              <Button type="button" variant="ghost" onClick={() => setStep('type')}>
-                Voltar
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {step === 'form' && businessType ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {businessType === 'COMPANY' ? 'Dados da empresa' : 'Dados do profissional'}
+            </CardTitle>
+            <CardDescription>
+              {verification
+                ? 'Você pode editar enquanto a solicitação estiver aberta.'
+                : 'Preencha para abrir sua solicitação.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <form onSubmit={submitForm} className="flex flex-col gap-4">
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor="tradeName">
+                  Nome fantasia
+                </label>
+                <Input
+                  id="tradeName"
+                  placeholder="Ex.: Barbearia do Zé"
+                  {...register('tradeName')}
+                />
+                {errors.tradeName ? (
+                  <p className="mt-1 text-xs text-destructive">{errors.tradeName.message}</p>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor="document">
+                  {businessType === 'COMPANY' ? 'CNPJ' : 'CPF'}
+                </label>
+                <Input
+                  id="document"
+                  placeholder={businessType === 'COMPANY' ? '00.000.000/0000-00' : '000.000.000-00'}
+                  value={documentDisplay}
+                  onChange={(e) => {
+                    const masked = maskCpfCnpj(e.target.value)
+                    setDocumentDisplay(masked)
+                    setValue('document', masked, { shouldValidate: true })
+                  }}
+                />
+                {errors.document ? (
+                  <p className="mt-1 text-xs text-destructive">{errors.document.message}</p>
+                ) : null}
+              </div>
+
+              {businessType === 'COMPANY' ? (
+                <div>
+                  <label className="text-sm font-medium text-foreground" htmlFor="legalName">
+                    Razão social
+                  </label>
+                  <Input id="legalName" placeholder="Ex.: Barbearia do Zé LTDA" {...register('legalName')} />
+                </div>
+              ) : null}
+
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor="responsibleName">
+                  Responsável
+                </label>
+                <Input id="responsibleName" placeholder="Nome de quem responde" {...register('responsibleName')} />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor="phone">
+                  Telefone
+                </label>
+                <Input
+                  id="phone"
+                  placeholder="(00) 00000-0000"
+                  value={phoneDisplay}
+                  onChange={(e) => {
+                    const masked = maskPhone(e.target.value)
+                    setPhoneDisplay(masked)
+                    setValue('phone', masked)
+                  }}
+                />
+                {errors.phone ? (
+                  <p className="mt-1 text-xs text-destructive">{errors.phone.message}</p>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor="categoryId">
+                  Categoria
+                </label>
+                <Select
+                  id="categoryId"
+                  error={errors.categoryId ? errors.categoryId.message : undefined}
+                  placeholder="Selecione"
+                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  {...register('categoryId')}
+                />
+              </div>
+
+              {flow.saveError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {flow.saveError}
+                </p>
+              ) : null}
+
+              <Button type="submit" disabled={flow.saving}>
+                {flow.saving ? 'Salvando…' : verification ? 'Salvar alterações' : 'Abrir solicitação'}
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Criando…' : 'Criar negócio'}
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {verification && mayUpload ? (
+        <DocumentsCard verification={verification} businessType={businessType} flow={flow} />
+      ) : null}
+
+      {verification && mayUpload ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Enviar para análise</CardTitle>
+            <CardDescription>
+              {verification.missingDocumentTypes.length > 0
+                ? `Faltam ${verification.missingDocumentTypes.length} documento(s) obrigatório(s).`
+                : 'Todos os documentos obrigatórios foram enviados.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {flow.submitError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {flow.submitError}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => void flow.submit()}
+                disabled={flow.submitting || flow.anyUploadInFlight || !maySubmit}
+              >
+                {flow.submitting ? 'Enviando…' : 'Submeter para análise'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void flow.cancel()}
+                disabled={flow.saving || flow.submitting}
+              >
+                Cancelar solicitação
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  )
+}
+
+function DocumentsCard({
+  verification,
+  businessType,
+  flow,
+}: {
+  verification: BusinessVerification
+  businessType: BusinessVerificationBusinessType
+  flow: ReturnType<typeof useBusinessVerificationFlow>
+}) {
+  const types = documentTypesFor(businessType)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Documentos</CardTitle>
+        <CardDescription>
+          Aceitamos JPEG, PNG, WebP ou PDF. O arquivo é validado no servidor.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {types.map((type) => {
+          // Obrigatoriedade vem do backend, nunca de uma lista local.
+          const required = isDocumentRequired(verification, type)
+          const submitted = isDocumentSubmitted(verification, type)
+          const upload = flow.documents[type]
+          const busy =
+            upload?.phase === 'presigned' ||
+            upload?.phase === 'uploading' ||
+            upload?.phase === 'uploaded'
+          return (
+            <div key={type} className="flex flex-col gap-2">
+              <label
+                className="text-sm font-medium text-foreground"
+                htmlFor={`doc-${type}`}
+                data-testid={`doc-label-${type}`}
+              >
+                {DOCUMENT_LABELS[type]}
+                <span
+                  className={cn('ml-2 text-xs', required ? 'text-destructive' : 'text-muted-foreground')}
+                >
+                  {required ? 'obrigatório' : 'opcional'}
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground">{DOCUMENT_HINTS[type]}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  id={`doc-${type}`}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  data-testid={`file-${type}`}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    void flow.uploadDocument(type, file)
+                  }}
+                />
+                <span data-testid={`doc-state-${type}`} className="text-xs text-muted-foreground">
+                  {upload
+                    ? `${UPLOAD_COPY[upload.phase]}${upload.fileName ? ` — ${upload.fileName}` : ''}`
+                    : submitted
+                      ? UPLOAD_COPY.completed
+                      : UPLOAD_COPY.idle}
+                </span>
+                {submitted && upload?.phase !== 'completed' ? (
+                  <span data-testid={`doc-submitted-${type}`} className="text-xs text-brand-600">
+                    já enviado
+                  </span>
+                ) : null}
+              </div>
+              {upload?.phase === 'error' ? (
+                <p role="alert" data-testid={`doc-error-${type}`} className="text-xs text-destructive">
+                  {upload.error}
+                </p>
+              ) : null}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
+function TypeOption({
+  testId,
+  title,
+  description,
+  icon,
+  onClick,
+}: {
+  testId: string
+  title: string
+  description: string
+  icon: React.ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={onClick}
+      className="flex items-start gap-3 rounded-lg border border-border p-4 text-left transition hover:border-brand-500"
+    >
+      <span className="text-brand-500">{icon}</span>
+      <span>
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
+      </span>
+    </button>
   )
 }
