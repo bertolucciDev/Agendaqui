@@ -6,7 +6,7 @@
 
 **Tipo:** IMPLEMENTAÇÃO + VALIDAÇÃO
 
-**Status:** CONCLUÍDO (fatias 1 + 2) — backend validado; fatia 1 (contrato D8 + T1–T9) e fatia 2 (onboarding + rota de acompanhamento) entregues e validadas. Restam abertos apenas o E2E de backend com storage mock (Q-3) e a limitação declarada Q-5.
+**Status:** CONCLUÍDO — backend validado (incluindo o E2E do fluxo completo com storage em memória, Q-3, que **encontrou e fechou um bug real**: o repositório do módulo estava sem `@Injectable()`, D-13); fatias 1 e 2 do frontend entregues e validadas. Restam apenas as limitações declaradas (Q-5, Q-6, U-1, U-2).
 
 **Data:** 2026-09-29
 
@@ -26,13 +26,15 @@ Eliminar, com evidência executada, cada blocker apontado pela auditoria `RETURN
 
 Os **8 blockers** anteriormente registrados foram encerrados. O item que a auditoria classificava como "job de expiração já existe, mas sem teste" era **FALSO** — o `verification.processor.ts` existente é de OTP de e-mail, sem relação com `BusinessVerification`; o status `EXPIRED` nunca era gravado por nada. Esse gap foi implementado de fato (CONFIRMADO por ausência de chamadores).
 
-O backend está **validado com evidência real**: typecheck, lint, build, 26 suites / 143 testes unitários e 3 suites / 14 testes e2e, todos verdes.
+O backend está **validado com evidência real**: typecheck, lint, build, 26 suites / 143 testes unitários e 4 suites / 15 testes e2e — incluindo o E2E de fluxo completo com storage mock (Q-3).
 
 No frontend foi entregue a **fatia 1** (decidida com o usuário): tipos, camada de API, a função pura de decisão D8, o escritor com revalidação e os testes T1–T9.
 
 Na sequência foi entregue a **fatia 2** (Q-1, Q-2, Q-4): `onboarding.business.tsx` reescrito para consumir `POST/PATCH /me/business-verification` + presign/complete + submit (nunca `POST /businesses`), a rota de acompanhamento `/onboarding/business-verification` (sob `/onboarding*`, contornando o `FirstBusinessGuard` congelado) e a suíte de páginas O-01..O-16. Os defeitos de contrato da fatia 1 (`RejectionReason`, `AttendanceType`, payloads de `completeDocument`) foram corrigidos contra os DTOs reais do backend.
 
-**Restam abertos** (não feitos, por decisão de escopo): o E2E de backend do fluxo completo com storage mock (Q-3) e a limitação declarada do cliente HTTP (Q-5).
+O único item além do previsto foi o E2E do Q-3 ter **encontrado um bug real em produção** (D-13), corrigindo o mesmo no caminho.
+
+**Restam abertos** (não feitos, por decisão de escopo): nenhuma entrega pendente; apenas as limitações declaradas (Q-5, Q-6) e as lacunas ambientais (U-1, U-2).
 
 ---
 
@@ -54,6 +56,7 @@ Classificação exigida: CONFIRMADO / PROVÁVEL / HIPÓTESE / DESCONHECIDO.
 | D-10 | `VerificationAggregate.tradeName`/`categoryId` eram `string | null`, incompatíveis com o schema (`String`, NOT NULL) e com o próprio `mapAggregate` (`tradeName: string`) | **CONFIRMADO** | `schema.prisma:427,431` vs `business-verification.repository.ts` vs `prisma-business-verification.repository.ts:393,397` |
 | D-11 | `PresignOutput` não tinha `storageKey`, embora o controller devolvesse o output e o comentário do handler prometesse a chave | **CONFIRMADO** | `verification.contract.ts` vs `presign-document.handler.ts` |
 | D-12 | Suposição anterior de que o UoW deveria criar `EmployeeMembership` OWNER | **REFUTADA** | OWNER é membership **virtual**, derivada de `Business.ownerUserId` e projetada em `session-aggregator.ts`. Não há linha a criar. |
+| D-13 | `PrismaBusinessVerificationRepository` estava **sem `@Injectable()`** | **CONFIRMADO** | E2E do Q-3: `GET /me/business-verification` respondia **500** (`Cannot read properties of undefined (reading 'businessVerification')`).Sem o decorator, não há `design:paramtypes`, e o Nest instancia a classe sem injetar `PrismaService`. Todo o ciclo estava inalcançável em runtime real; nenhum teste anterior exercitava o provider (`unit` mocka o repositório; os 3 e2e existentes não tocam o módulo) |
 
 ---
 
@@ -174,13 +177,27 @@ Decisões registradas:
 - **`canEdit` de REJECTED respeita `canResubmit`**: esgotadas as tentativas, não se oferece correção.
 - **A tela de acompanhamento é somente leitura**; edição ocorre no onboarding.
 
+### 6.6 Backend — Q-3: E2E do fluxo completo com storage mock
+
+| Arquivo | Alteração | Motivo |
+|---|---|---|
+| `test/business-verification-flow.e2e-spec.ts` | **Novo**, 1 teste de 16 passos | Q-3: register → verify-email (código determinístico via override de `VerificationCodeService`) → login → GET vazio (200, `verificationId: null`) → create DRAFT → presign → "upload" (put em `InMemoryStorage`) → complete com sha256 errado (409, prova de revalidação) → complete correto → GET (documento submetido) → submit → **403 na auto-aprovação** (separação de funções) → admin aprova → GET APPROVED com `approvedBusinessId` → `/me/session` com `OWNER` + membership virtual → PATCH `/me/preferences` (a escrita do D8) → GET confirma persistência |
+| `src/modules/business-verification/infra/prisma/prisma-business-verification.repository.ts` | Adicionado `@Injectable()` | **D-13 (CONFIRMADO)**: sem o decorator, o Nest instanciava o repositório sem `PrismaService` e todo o ciclo respondia **500** em runtime real |
+
+Decisões de implementação do mock:
+
+- **`OBJECT_STORAGE` substituído por `InMemoryStorage`** (porta, não adapter): o teste cobre magic bytes, `sha256` recalculado e a transação de aprovação de verdade; o que fica fora é o transporte real (presigned URL + PUT), declarado em §14 (U-1).
+- **Código de e-mail determinístico** (`VerificationCodeService` falso): independe do worker BullMQ/SMTP; o resto do ciclo de verificação (token com hash, tentativas, expiração) é real.
+- **Limpeza verificada**: `afterAll` remove usuários, verification, documentos, audit events, business, location, categoria e o AdminProfile — verificado com consulta após o run (0 resíduos).
+- `status` do Business é checado **no banco** (decisão E9 do UoW), porque o contrato congelado de `/me/session` não o expõe.
+
 ---
 
 ## 7. ALTERAÇÕES NÃO REALIZADAS
 
 | Item | Motivo |
 |---|---|
-| **E2E de backend do fluxo completo com storage mock (Q-3)** | Não executado nesta rodada; mantido como pendência |
+| Parte do U-1 (SDK R2 real no browser) | O E2E do Q-3 valida tudo exceto o transporte real: presign de fato, PUT real e a superfície do SDK R2 continuam **não medidos** |
 | Alterar `lib/axios/client.ts` | Proibido pelo gate (sem `timeout`, replay de 401 é Limitação Conhecida declarada) |
 | Alterar `/me/session`, `/me/preferences`, `FirstBusinessGuard`, `WorkspaceProvider` | Contrato congelado |
 | Alterar `businesses.new.tsx` / `onboarding.tsx` (legado) | Fora do escopo da fatia 2: `businesses.new.tsx` ainda usa `businessesApi.create` (`POST /businesses`, 410) para "criar outro negócio"; `onboarding.tsx` é código não roteado (`/onboarding` redireciona para `/onboarding/business`) |
@@ -209,7 +226,7 @@ Decisões registradas:
 | `npx eslint <todos os .ts alterados>` | exit 0 |
 | `npx nest build` | exit 0 |
 | `pnpm test:unit` | **26 suites / 143 testes, todos passando** |
-| `npx jest --config ./test/jest-e2e.json --runInBand` | **3 suites / 14 testes, todos passando** |
+| `npx jest --config ./test/jest-e2e.json --runInBand` | **4 suites / 15 testes, todos passando** (inclui `business-verification-flow.e2e-spec.ts`) |
 
 ### Frontend (`agendaqui-web`)
 
@@ -290,6 +307,8 @@ O único ambiente não validado é o **em produção**: nada foi implantado, e o
 | P-6 | `tsc -b` acusava `TS2339 ... does not exist on type 'never'` em `upload-document.test.ts` | O helper `deps()` fazia `as never`; tipado com `Mocks & UploadDependencies` via `unknown` |
 | P-7 | Testes da página usavam `global` e spread sem tupla; `it.each` sem genérico | Trocado por `globalThis`, assinatura variádica e `it.each<[string,string]>` |
 | P-8 | Teste de erro simulava rejeição **antes** do `mount`, que a sobrescrevia | `mount()` passou a aceitar `rejectWith` |
+| P-9 | E2E do Q-3: presunções de contrato erradas na 1ª execução (`submit` esperado 201 → é 200; `status` de Business esperado em `/me/session` → o contrato congelado não o expõe) | Asserções corrigidas no teste; o `status` validado direto no banco. Nenhuma delas era defeito de produção |
+| P-10 | E2E do Q-3: **talão do módulo em runtime** — `GET /me/business-verification` 500 por `@Injectable()` ausente no `PrismaBusinessVerificationRepository` | D-13: decorator adicionado; é a prova de valor do Q-3 (nada antes exercitava o provider real) |
 
 Nenhum problema foi ocultado. P-1 a P-3 são limitações dos testes, não do código de produção.
 
@@ -301,7 +320,7 @@ Nenhum problema foi ocultado. P-1 a P-3 são limitações dos testes, não do c�
 |---|-----------|-----------|
 | Q-1 | ~~Fatia 2 do frontend~~ **RESOLVIDA**: onboarding reescrito para `POST/PATCH /me/business-verification` + presign/complete + submit; `POST /businesses` não é mais chamado no fluxo | — |
 | Q-2 | ~~Rota de acompanhamento~~ **RESOLVIDA**: `/onboarding/business-verification` sob `/onboarding*` | — |
-| Q-3 | **E2E de backend do fluxo completo** com storage mock: register → verify → login → DRAFT → presign → upload → complete → submit → PENDING → admin → approve → `/me/session` com o negócio → D8 | Média |
+| Q-3 | ~~E2E de backend do fluxo completo~~ **RESOLVIDA**: `test/business-verification-flow.e2e-spec.ts` (1 teste, 16 passos) cobrindo register → verify → login → DRAFT → presign → upload(mock) → complete → submit → PENDING → 403 auto-aprovação → admin approve → APPROVED → `/me/session` com o negócio → PATCH `/me/preferences` (a escrita do D8). Encontrou e corrigiu o bug D-13 | — |
 | Q-4 | ~~Ajustar `onboarding.business.test.tsx`~~ **RESOLVIDA**: suíte reescrita (O-01..O-16) | — |
 | Q-5 | Limitação Conhecida já declarada pelo gate e **não** alterada: interceptor de 401 reaplica escrita uma vez fora do orçamento de D8, e o cliente axios não define `timeout` | Baixa (declarada) |
 | Q-6 | Limite nomeado do próprio gate: a escolha manual persistida **estritamente entre** a leitura de revalidação e o envio do PATCH não é observável por D8. Determinístico (o servidor aplica a última escrita) e próprio do endpoint congelado | Baixa (declarada) |
@@ -312,7 +331,7 @@ Nenhum problema foi ocultado. P-1 a P-3 são limitações dos testes, não do c�
 
 | # | Lacuna |
 |---|---------|
-| U-1 | Comportamento de multipart/streaming do SDK R2 no upload real do browser: marcado **PROVÁVEL** pelo freeze, não verificado nesta rodada (o E2E com storage mock, Q-3, é o que fecharia isso) |
+| U-1 | Comportamento do SDK R2 no upload real do browser (presign de fato, PUT real, multipart/streaming): **PARCIALMENTE FECHADO** — o Q-3 validou todo o ciclo server-side contra storage em memória (assinatura, sha256 recalculado, transação de aprovação), mas o transporte real contra o R2 permanece **DESCONHECIDO** |
 | U-2 | Comportamento de `BullMQ` quando `REDIS_URL` está indisponível no boot: o `onModuleInit` do processor enfileira o job. Em e2e local com Redis presente passou; em ambiente sem Redis o comportamento **não** foi medido — **DESCONHECIDO** |
 | U-3 | Cadência ideal de polling do acompanhamento (10s adotado) é decisão de produto, não derivável dos gates — **PROVÁVEL** |
 | U-4 | Nenhum valor de U-1..U-3 foi preenchido por suposição em código |
@@ -325,7 +344,7 @@ Os 8 blockers do backend foram encerrados com evidência executada, e um nono ga
 
 A fatia 2 do frontend foi entregue: o onboarding deixou de apontar para o endpoint morto (`POST /businesses`) e passou a usar o ciclo de verificação; a rota de acompanhamento foi criada sob `/onboarding*` para conviver com o `FirstBusinessGuard` congelado. Os defeitos de contrato da fatia 1 foram corrigidos contra os DTOs reais, e a suíte de páginas cobre O-01..O-16.
 
-O que **não** está pronto é o E2E de backend do fluxo completo com storage mock (Q-3), que fecharia a lacuna U-1, e a limitação declarada Q-5 do cliente HTTP.
+O E2E do fluxo completo (Q-3) foi implementado e, no caminho, encontrou e corrigiu um bug real (D-13). Restam apenas as limitações declaradas Q-5/Q-6 e as lacunas ambientais U-1 (parcial) e U-2.
 
 ---
 
@@ -333,7 +352,7 @@ O que **não** está pronto é o E2E de backend do fluxo completo com storage mo
 
 1. Aprovar o backend como está: validado, sem contrato alterado.
 2. Aprovar as fatias 1 e 2 do frontend: o fluxo de cliente está navegável de ponta a ponta contra a API nova (O-01..O-16 verdes).
-3. Autorizar Q-3 (E2E com storage mock) em seguida, fechando U-1.
+3. Q-3 entregue com evidência (D-13 encontrado e corrigido).
 4. Medir U-2 antes de qualquer ambiente sem Redis.
 5. Antes de abrir o PR 7, decidir o destino do legado `businesses.new.tsx` (`POST /businesses` = 410) e do código não roteado `onboarding.tsx`.
 
@@ -369,14 +388,14 @@ Nada foi commitado. Nenhum push. Nenhum PR atualizado.
 9. Informar problemas pré-existentes encontrados. — Cumprido: §4 (D-1 a D-12, D-8 e D-12 como refutados).
 10. Informar problemas introduzidos pela alteração. — Cumprido: §12, P-5 foi introduzido e corrigido antes de testes; nenhum outro.
 11. Informar testes executados e seus resultados. — Cumprido: §9.
-12. Informar testes que deveriam ser executados, mas não puderam. — Cumprido: §7 e §13 (Q-3).
+12. Informar testes que deveriam ser executados, mas não puderam. — Cumprido: §7 sobraram apenas limitações declaradas; Q-3 executado.
 13. Não ampliar o escopo sem autorização. — Cumprido: a expiração foi implementada por ser gap confirmado e listado; a fatia 2 foi adiada por decisão do usuário, não por omissão.
 14. Não realizar refatorações desnecessárias. — Cumprido: só o que remove `any`/cast ou corrige defeito confirmado.
 15. Preservar APIs, contratos, interfaces e comportamentos existentes. — Cumprido: `/me/session` e `/me/preferences` intocados; nenhum endpoint alterado.
 16. Quando faltar contexto, declarar explicitamente. — Cumprido: §14, U-1..U-4.
 17. Nunca preencher informações desconhecidas com suposições. — Cumprido.
 18. Toda conclusão deve possuir evidência correspondente. — Cumprido: §15 remete a §9/§12/§13.
-19. O status final deve refletir a realidade da execução. — Cumprido: **PARCIALMENTE CONCLUÍDO**, não "concluído".
+19. O status final deve refletir a realidade da execução. — Cumprido: **CONCLUÍDO** para o escopo Q-1..Q-4; Q-5/Q-6 são limitações declaradas, não pendências.
 20. Se houver dúvida, declarar a dúvida em vez de assumir. — Cumprido: §14 e §16.5.
 
 ---
@@ -384,10 +403,10 @@ Nada foi commitado. Nenhum push. Nenhum PR atualizado.
 # RESULTADO
 
 ```text
-BACKEND .......... PASS (validado: tsc, eslint, build, 26/143 unit, 3/14 e2e, 12/12 migrations)
+BACKEND .......... PASS (validado: tsc, eslint, build, 26/143 unit, 4/15 e2e, 12/12 migrations)
 FRONTEND FATIA 1 .. PASS (validado: tsc -b, oxlint, 13/113 vitest; T1-T9 verdes)
 FRONTEND FATIA 2 .. PASS (onboarding + acompanhamento; O-01..O-16 verdes; POST /businesses ausente no fluxo)
 BUILD WEB ......... PASS (npm run build exit 0)
-E2E BACKEND (Q-3). NÃO EXECUTADO (pendência declarada)
-STATUS GERAL ...... CONCLUÍDO (fatias 1+2); Q-3 aberta
+E2E BACKEND (Q-3). PASS (register → verify → login → DRAFT → presign → upload → complete → submit → approve → /me/session → preferências; bug D-13 encontrado e corrigido)
+STATUS GERAL ...... CONCLUÍDO (Q-1..Q-4 entregues; Q-5/Q-6/U-1/U-2 declarados)
 ```
