@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { useBusinessVerification } from '@/hooks/use-business-verification'
 import { useSession } from '@/app/providers/session'
 import { DOCUMENT_LABELS, REJECTION_LABELS } from '@/lib/verification/document-rules'
-import { canEdit, isEmpty } from '@/lib/verification/permissions'
+import { isEmpty } from '@/lib/verification/permissions'
 import { describeError } from '@/lib/verification/errors'
 import type { BusinessVerification } from '@/types/business-verification'
 import { Button } from '@/components/ui/button'
@@ -52,12 +52,19 @@ const STATUS_VIEW: Record<string, { title: string; body: string; tone: string }>
 }
 
 /**
- * REJECTED só oferece correção enquanto o backend permite reenviar
- * (`canResubmit`). Esgotadas as tentativas, a solicitação está encerrada.
+ * Caminho de ação por estado:
+ * - REJECTED com `canResubmit`: o rascunho rejeitado é EDITÁVEL no onboarding
+ *   (o backend aceita PATCH em DRAFT/REJECTED);
+ * - EXPIRED/CANCELLED: a solicitação está encerrada — o onboarding abre uma
+ *   NOVA (o backend só reusa a solicitação aberta);
+ * - demais estados não recebem ação aqui.
  */
 function canOfferEdit(data: { status: BusinessVerification['status']; canResubmit: boolean }): boolean {
-  if (data.status === 'REJECTED') return data.canResubmit
-  return canEdit(data.status)
+  return data.status === 'REJECTED' && data.canResubmit
+}
+
+function canReopen(data: { status: BusinessVerification['status'] }): boolean {
+  return data.status === 'EXPIRED' || data.status === 'CANCELLED'
 }
 
 export default function OnboardingBusinessVerificationPage() {
@@ -165,6 +172,12 @@ export default function OnboardingBusinessVerificationPage() {
           {canOfferEdit(data) ? (
             <Link to="/onboarding/business">
               <Button variant="outline">Editar solicitação</Button>
+            </Link>
+          ) : null}
+
+          {canReopen(data) ? (
+            <Link to="/onboarding/business">
+              <Button variant="outline">Abrir nova verificação</Button>
             </Link>
           ) : null}
 
