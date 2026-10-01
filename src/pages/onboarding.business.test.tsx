@@ -47,7 +47,11 @@ vi.mock('@/services/api/categories', () => ({
 }))
 
 const refreshSession = vi.fn()
-const invalidateQueries = vi.fn(async () => undefined)
+// Consequência do P-5: o wrapper do mock tem identidade ESTÁVEL. Antes, o mock
+// criava uma função nova a cada render, o efeito APPROVED (que a tem como
+// dependência) re-executava em laço e afogava a navegação (flake na suíte
+// completa). A instabilidade era do mock, não da página.
+const stableRefreshSession = (...a: unknown[]) => refreshSession(...a)
 vi.mock('@/app/providers/session', () => ({
   useSession: () => ({
     session: {
@@ -59,7 +63,7 @@ vi.mock('@/app/providers/session', () => ({
       preferences: { activeMode: null, activeBusinessId: null },
     },
     isSessionLoading: false,
-    refreshSession: (...a: unknown[]) => refreshSession(...a),
+    refreshSession: stableRefreshSession,
   }),
 }))
 
@@ -92,7 +96,9 @@ function output(overrides: Partial<BusinessVerification> = {}): BusinessVerifica
     tradeName: 'Barbearia Teste',
     legalName: null,
     responsibleName: null,
-    responsibleCpf: null,
+    // COMPANY sempre persiste o CPF do responsável (obrigatório no backend);
+    // INDIVIDUAL deriva do próprio documento — o default cobre ambos.
+    responsibleCpf: '11144477735',
     categoryId: 'cat_1',
     phone: null,
     timezone: null,
@@ -168,6 +174,15 @@ function mount(initial = EMPTY_OUTPUT) {
   // invalidação devolve a solicitação nova, como no backend real.
   getMy.mockImplementation(async () => serverState)
   create.mockImplementation(async (payload: Record<string, unknown>) => {
+    // Validação de domínio espelhada do backend (deriveResponsibleCpf): COMPANY
+    // exige CPF do responsável — foi assim que o P-1 escapou dos testes
+    // hipotéticos que não validavam o domínio aqui.
+    if (
+      payload.businessType === 'COMPANY' &&
+      String(payload.responsibleCpf ?? '').replace(/\D/g, '').length !== 11
+    ) {
+      throw httpError(400, 'CPF do responsável é obrigatório para pessoa jurídica.')
+    }
     serverState = output({
       status: 'DRAFT',
       businessType: payload.businessType as BusinessVerification['businessType'],
@@ -176,6 +191,7 @@ function mount(initial = EMPTY_OUTPUT) {
       categoryId: payload.categoryId as string,
       legalName: (payload.legalName as string) ?? null,
       responsibleName: (payload.responsibleName as string) ?? null,
+      responsibleCpf: (payload.responsibleCpf as string) ?? null,
       phone: (payload.phone as string) ?? null,
       requiredDocumentTypes:
         payload.businessType === 'COMPANY' ? ['COMPROVANTE_CNPJ'] : ['CPF_FRENTE', 'CPF_VERSO'],
@@ -222,10 +238,15 @@ function pdfFile(name = 'comprovante.pdf') {
   return new File([new Uint8Array(12)], name, { type: 'application/pdf' })
 }
 
-async function fillCompanyForm() {
+async function fillCompanyForm({ skipResponsibleCpf = false } = {}) {
   fireEvent.click(screen.getByTestId('pick-cnpj'))
   fireEvent.change(screen.getByLabelText('CNPJ'), { target: { value: '04.252.011/0001-10' } })
   fireEvent.change(screen.getByLabelText('Nome fantasia'), { target: { value: 'Barbearia Teste' } })
+  if (!skipResponsibleCpf) {
+    fireEvent.change(screen.getByLabelText('CPF do responsável'), {
+      target: { value: '111.444.777-35' },
+    })
+  }
   const select = await screen.findByLabelText('Categoria')
   await waitFor(() => expect(screen.getByRole('option', { name: 'Barbearia' })).toBeTruthy())
   fireEvent.change(select, { target: { value: 'cat_1' } })
@@ -235,7 +256,6 @@ beforeEach(() => {
   localStorage.clear()
   vi.clearAllMocks()
   sessionState = sessionFixture()
-  invalidateQueries.mockClear()
   ;(globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
     new Response('', { status: 200 }),
   )
@@ -270,6 +290,22 @@ describe('O-01/O-02/O-16 — DRAFT', () => {
     )
     // Nenhum campo de endereço: não existe mais no contrato de criação.
     expect(create.mock.calls[0][0]).not.toHaveProperty('address')
+    // COMPANY exige CPF do responsável (deriveResponsibleCpf no backend) —
+    // enviado em dígitos crus, sem a máscara de apresentação.
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ responsibleCpf: '11144477735' }))
+  })
+
+  it('P-1: COMPANY sem CPF do responsável é barrado pela validação local (API intacta)', async () => {
+    mount(EMPTY_OUTPUT)
+    await waitFor(() => expect(screen.getByText('Como seu negócio está registrado?')).toBeTruthy())
+
+    await fillCompanyForm({ skipResponsibleCpf: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir solicitação' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Informe o CPF do responsável (11 dígitos)')).toBeTruthy(),
+    )
+    expect(create).not.toHaveBeenCalled()
   })
 
   it('O-02: DRAFT existente é preservado — a edição usa PATCH, nunca POST', async () => {
@@ -539,8 +575,10 @@ describe('O-09/O-10 — APPROVED', () => {
       activeMode: 'OWNER',
       activeBusinessId: 'biz_approved',
     })
-    await waitFor(() => expect(refreshSession).toHaveBeenCalled())
-    await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/dashboard'))
+    await waitFor(() => expect(refreshSession).toHaveBeenCalled(), { timeout: 3000 })
+    await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/dashboard'), {
+      timeout: 3000,
+    })
   })
 })
 
@@ -548,25 +586,15 @@ describe('O-09/O-10 — APPROVED', () => {
 /* O-11..O-13 — estados de encerramento                                */
 /* ------------------------------------------------------------------ */
 
-describe('O-11/O-12/O-13 — estados terminais', () => {
-  it.each<[string, string]>([
-    ['PENDING', 'O-08'],
-    ['REJECTED', 'O-11'],
-    ['EXPIRED', 'O-12'],
-    ['CANCELLED', 'O-13'],
-  ])('%s encaminha para a rota de acompanhamento (%s)', async (status) => {
-    mount(
-      output({
-        status: status as BusinessVerification['status'],
-        missingDocumentTypes: status === 'PENDING' ? [] : ['COMPROVANTE_CNPJ'],
-      }),
-    )
+describe('O-11/O-12/O-13 — estados de encerramento', () => {
+  it("O-08: PENDING encaminha para a rota de acompanhamento", async () => {
+    mount(output({ status: 'PENDING', missingDocumentTypes: [] }))
     await waitFor(() =>
       expect(screen.getByTestId('path').textContent).toBe('/onboarding/business-verification'),
     )
   })
 
-  it('O-11: REJECTED oferece correção — a tela de edição continua acessível', async () => {
+  it('O-11: REJECTED NÃO é redirecionado — o formulário fica editável (correção do bounce)', async () => {
     mount(
       output({
         status: 'REJECTED',
@@ -576,10 +604,30 @@ describe('O-11/O-12/O-13 — estados terminais', () => {
         missingDocumentTypes: ['COMPROVANTE_CNPJ'],
       }),
     )
-    await waitFor(() =>
-      expect(screen.getByTestId('path').textContent).toBe('/onboarding/business-verification'),
-    )
+    // Regressão do P-2: o link "Editar solicitação" da tela de acompanhamento
+    // aponta para cá; redirecionar o REJECTED de volta tornava a correção
+    // impossível. A tela precisa ficar editável.
+    await waitFor(() => expect(screen.getByLabelText('Nome fantasia')).toBeTruthy())
+    expect(screen.getByTestId('path').textContent).not.toBe('/onboarding/business-verification')
+
+    fireEvent.change(screen.getByLabelText('Nome fantasia'), { target: { value: 'Reenvio' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    expect(create).not.toHaveBeenCalled()
   })
+
+  it.each<[string]>([['EXPIRED'], ['CANCELLED']])(
+    'O-12/O-13: %s abre NOVA solicitação (create, nunca update)',
+    async (status) => {
+      mount(output({ status: status as BusinessVerification['status'] }))
+      await waitFor(() => expect(screen.getByLabelText('Nome fantasia')).toBeTruthy())
+      expect(screen.getByTestId('path').textContent).not.toBe('/onboarding/business-verification')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Abrir solicitação' }))
+      await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+      expect(update).not.toHaveBeenCalled()
+    },
+  )
 })
 
 /* ------------------------------------------------------------------ */

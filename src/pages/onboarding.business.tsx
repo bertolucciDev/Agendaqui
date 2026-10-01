@@ -13,7 +13,7 @@ import {
 } from '@/hooks/use-business-verification-flow'
 import { useBusinessVerification } from '@/hooks/use-business-verification'
 import { maskCpfCnpj, maskPhone, unmask } from '@/lib/masks'
-import { isEmpty } from '@/lib/verification/permissions'
+import { canEdit, isEmpty } from '@/lib/verification/permissions'
 import {
   DOCUMENT_HINTS,
   DOCUMENT_LABELS,
@@ -50,18 +50,31 @@ import { cn } from '@/lib/utils'
  * Esta tela apenas redireciona para o dashboard.
  */
 
-const formSchema = z.object({
-  businessType: z.enum(['COMPANY', 'INDIVIDUAL']),
-  tradeName: z.string().min(2, 'Informe o nome do negócio'),
-  document: z.string().min(1, 'Informe o documento'),
-  categoryId: z.string().min(1, 'Selecione uma categoria'),
-  legalName: z.string().optional(),
-  responsibleName: z.string().optional(),
-  phone: z
-    .string()
-    .optional()
-    .refine((v) => !v || unmask(v).length >= 10, 'Telefone inválido'),
-})
+const formSchema = z
+  .object({
+    businessType: z.enum(['COMPANY', 'INDIVIDUAL']),
+    tradeName: z.string().min(2, 'Informe o nome do negócio'),
+    document: z.string().min(1, 'Informe o documento'),
+    categoryId: z.string().min(1, 'Selecione uma categoria'),
+    legalName: z.string().optional(),
+    responsibleName: z.string().optional(),
+    // O backend exige CPF do responsável para COMPANY (deriveResponsibleCpf em
+    // create/update); para INDIVIDUAL ele é derivado do próprio documento.
+    responsibleCpf: z.string().optional(),
+    phone: z
+      .string()
+      .optional()
+      .refine((v) => !v || unmask(v).length >= 10, 'Telefone inválido'),
+  })
+  .superRefine((values, ctx) => {
+    if (values.businessType === 'COMPANY' && unmask(values.responsibleCpf ?? '').length !== 11) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['responsibleCpf'],
+        message: 'Informe o CPF do responsável (11 dígitos)',
+      })
+    }
+  })
 
 type FormData = z.infer<typeof formSchema>
 
@@ -83,6 +96,7 @@ export default function OnboardingBusinessPage() {
   const [step, setStep] = useState<'type' | 'form'>('type')
   const [documentDisplay, setDocumentDisplay] = useState('')
   const [phoneDisplay, setPhoneDisplay] = useState('')
+  const [responsibleCpfDisplay, setResponsibleCpfDisplay] = useState('')
   const hydratedFor = useRef<string | null>(null)
 
   const alreadyHasBusiness = !!session && session.businesses.length > 0
@@ -107,6 +121,7 @@ export default function OnboardingBusinessPage() {
       categoryId: '',
       legalName: '',
       responsibleName: '',
+      responsibleCpf: '',
       phone: '',
     },
   })
@@ -140,8 +155,10 @@ export default function OnboardingBusinessPage() {
     setValue('categoryId', verification.categoryId ?? '')
     setValue('legalName', verification.legalName ?? '')
     setValue('responsibleName', verification.responsibleName ?? '')
+    setValue('responsibleCpf', verification.responsibleCpf ?? '')
     setValue('phone', verification.phone ?? '')
     setDocumentDisplay(maskCpfCnpj(verification.document ?? ''))
+    setResponsibleCpfDisplay(maskCpfCnpj(verification.responsibleCpf ?? ''))
     setPhoneDisplay(maskPhone(verification.phone ?? ''))
     if (verification.businessType) setStep('form')
   }, [setValue, verification])
@@ -157,9 +174,12 @@ export default function OnboardingBusinessPage() {
     navigate('/dashboard', { replace: true })
   }, [navigate, queryClient, refreshSession, refetch, status])
 
-  // Estados que não são de preenchimento vão para a tela de acompanhamento.
+  // PENDING é estado de ESPERA: nada a editar, então vai para o acompanhamento.
+  // REJECTED permanece aqui (é editável até o limite de tentativas);
+  // EXPIRED/CANCELLED voltam como formulário pré-preenchido para uma NOVA
+  // solicitação — `submitForm` decide create vs update por `canEdit(status)`.
   useEffect(() => {
-    if (status === 'PENDING' || status === 'EXPIRED' || status === 'CANCELLED' || status === 'REJECTED') {
+    if (status === 'PENDING') {
       navigate('/onboarding/business-verification', { replace: true })
     }
   }, [navigate, status])
@@ -200,11 +220,15 @@ export default function OnboardingBusinessPage() {
       categoryId: values.categoryId,
       ...(values.legalName ? { legalName: values.legalName.trim() } : {}),
       ...(values.responsibleName ? { responsibleName: values.responsibleName.trim() } : {}),
+      ...(values.businessType === 'COMPANY'
+        ? { responsibleCpf: unmask(values.responsibleCpf ?? '') }
+        : {}),
       ...(values.phone ? { phone: unmask(values.phone) } : {}),
     }
 
-    // DRAFT existente é PRESERVADO: `update` (PATCH) em vez de `create` (POST).
-    const saved = verification ? await flow.update(payload) : await flow.create(payload)
+    // Solicitação aberta (DRAFT/REJECTED) é PRESERVADA: `update` (PATCH).
+    // Encerrada (EXPIRED/CANCELLED) não é editável pelo backend: abre nova.
+    const saved = canEdit(status ?? null) ? await flow.update(payload) : await flow.create(payload)
     if (saved) setStep('form')
   })
 
@@ -313,6 +337,27 @@ export default function OnboardingBusinessPage() {
                 <Input id="responsibleName" placeholder="Nome de quem responde" {...register('responsibleName')} />
               </div>
 
+              {businessType === 'COMPANY' ? (
+                <div>
+                  <label className="text-sm font-medium text-foreground" htmlFor="responsibleCpf">
+                    CPF do responsável
+                  </label>
+                  <Input
+                    id="responsibleCpf"
+                    placeholder="000.000.000-00"
+                    value={responsibleCpfDisplay}
+                    onChange={(e) => {
+                      const masked = maskCpfCnpj(e.target.value)
+                      setResponsibleCpfDisplay(masked)
+                      setValue('responsibleCpf', masked, { shouldValidate: true })
+                    }}
+                  />
+                  {errors.responsibleCpf ? (
+                    <p className="mt-1 text-xs text-destructive">{errors.responsibleCpf.message}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor="phone">
                   Telefone
@@ -352,7 +397,11 @@ export default function OnboardingBusinessPage() {
               ) : null}
 
               <Button type="submit" disabled={flow.saving}>
-                {flow.saving ? 'Salvando…' : verification ? 'Salvar alterações' : 'Abrir solicitação'}
+                {flow.saving
+                  ? 'Salvando…'
+                  : verification && canEdit(status ?? null)
+                    ? 'Salvar alterações'
+                    : 'Abrir solicitação'}
               </Button>
             </form>
           </CardContent>

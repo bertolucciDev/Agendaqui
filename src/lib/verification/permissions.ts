@@ -15,7 +15,7 @@ import type { BusinessVerification } from '@/types/business-verification'
  *
  * Estas funções são apresentação pura sobre o contrato. O backend continua
  * sendo quem rejeita uma operação indevida — aqui apenas evitamos mostrar
- * botões que eleuttle undoubtedly vai recusar.
+ * botões que ele infalivelmente recusaria.
  */
 
 export function canEdit(status: BusinessVerification['status']): boolean {

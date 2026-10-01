@@ -193,6 +193,23 @@ Decisões de implementação do mock:
 
 ---
 
+## ANEXO — Correções pós-investigação (P-1..P-6)
+
+Investigação do estado atual do frontend (diagnóstico na sessão) encontrou e a correção confirmou:
+
+| # | Problema | Correção |
+|---|---|---|
+| P-1 | **CNPJ quebrava no POST**: o formulário de `onboarding.business.tsx` nunca coletava `responsibleCpf`, obrigatório no backend para COMPANY (`deriveResponsibleCpf` → 400). O payload suportava o campo; nenhum teste validava o domínio (mocks não executavam a validação) | Campo no schema zod (`superRefine` condicional COMPANY→11 dígitos), input mascarado, hidratação do DRAFT, payload `create/update`; mock de `create` agora reprova sem o campo (fechando a rota de escape do bug); teste novo prova o bloqueio local |
+| P-2 | **REJECTED/CANCELLED/EXPIRED sem saída na UI**: o onboarding redirecionava todos os estados terminais para o acompanhamento, e o botão "Editar solicitação" batia no redirect — bounce finito (não resolve) | `onboarding.business.tsx` só redireciona em PENDING; REJECTED é editável (PATCH); EXPIRED/CANCELLED abrem NOVA solicitação (POST); acompanhamento oferece "Abrir nova verificação" nos encerrados |
+| P-5 | **O-09/O-10 intermitente na suíte completa** | Era o **mock** de `useSession` criando um `refreshSession` novo por render — o efeito APPROVED re-executava em laço (refreshSession chamado 12×, navegação nunca assentava). Estabilizado com identidade fixa. 5 execuções completas seguidas: 113/113 |
+| P-6 | Comentário corrompido em `permissions.ts` ("eleuttle undoubtedly") | Corrigido |
+| P-3 | `businesses.new.tsx` roteada chamando `POST /businesses` (410) | **NÃO REALIZADO** — decisão de produto pendente (redirecionar ao fluxo de verificação vs. aposentar) |
+| P-4 | Mock `lib/mock/handlers.ts` sem `me/business-verification` (e permitindo criar business direto, paridade inversa do 410) | **NÃO REALIZADO** — mesma decisão |
+
+Validação pós-correção: `tsc -b --force` 0; `oxlint` 0 (nos arquivos tocados); `vitest run` 113/113 em 5 execuções completas; `npm run build` OK.
+
+---
+
 ## 7. ALTERAÇÕES NÃO REALIZADAS
 
 | Item | Motivo |
