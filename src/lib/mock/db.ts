@@ -147,6 +147,44 @@ export interface MockAppointment {
   createdAt: string
 }
 
+export interface MockVerificationDocument {
+  id: string
+  documentType: string
+  version: number
+  status: 'ACTIVE' | 'SUPERSEDED' | 'REJECTED'
+  sizeBytes: number
+  mimeType: string
+  storageKey: string
+  createdAt: string
+}
+
+export interface MockBusinessVerification {
+  id: string
+  ownerUserId: string
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED'
+  businessType: 'COMPANY' | 'INDIVIDUAL'
+  document: string
+  tradeName: string
+  legalName: string | null
+  responsibleName: string | null
+  responsibleCpf: string | null
+  categoryId: string
+  phone: string | null
+  timezone: string | null
+  attendanceType: string | null
+  attemptCount: number
+  maxAttempts: number
+  requiredDocumentTypes: string[]
+  documents: MockVerificationDocument[]
+  submittedAt: string | null
+  decidedAt: string | null
+  expiresAt: string | null
+  rejectionReason: string | null
+  rejectionComment: string | null
+  approvedBusinessId: string | null
+  createdAt: string
+}
+
 export interface MockDb {
   version: number
   seedDate: string
@@ -159,6 +197,7 @@ export interface MockDb {
     memberships: MockMembership[]
     appointments: MockAppointment[]
     customerProfiles: MockCustomerProfile[]
+    businessVerifications: MockBusinessVerification[]
     preferences: Record<string, MockSessionPreferences>
     counters: Record<string, number>
   }
@@ -576,6 +615,7 @@ function buildSeed(): MockDb {
       memberships,
       appointments,
       customerProfiles,
+      businessVerifications: [],
       preferences: {},
       counters: {
         biz: 2,
@@ -626,6 +666,7 @@ export function getDb(): MockDb {
         ) {
           // normalização: fixtures do contrato MOCK-FIRST podem não existir em DBs antigas
           if (!Array.isArray(parsed.customerProfiles)) parsed.customerProfiles = []
+          if (!Array.isArray(parsed.businessVerifications)) parsed.businessVerifications = []
           if (!parsed.preferences || typeof parsed.preferences !== 'object') parsed.preferences = {}
           memoryDb = parsed
           return parsed

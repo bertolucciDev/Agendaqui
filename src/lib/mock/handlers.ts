@@ -6,8 +6,10 @@ import {
   dateOffsetKey,
   type MockAppointment,
   type MockAppointmentStatus,
+  type MockBusinessVerification,
   type MockMembership,
   type MockService,
+  type MockVerificationDocument,
   type MockDb,
   type MeSessionPayload,
   type SessionMode,
@@ -294,6 +296,8 @@ export function handleRequest(
       }
       db.users.push(user)
       db.sessionUserId = id
+      // paridade com o backend: register cria customerProfile (CUSTOMER mode)
+      db.customerProfiles.push({ id: `cp_${id}`, userId: id, reputation: 0, strikes: 0 })
       saveDb()
       return ok(user)
     }
@@ -370,6 +374,9 @@ export function handleRequest(
 
   /* ---------------- me ---------------- */
   if (segs[0] === 'me') {
+    if (segs[1] === 'business-verification') {
+      return handleBusinessVerification(method, segs.slice(2), body)
+    }
     if (segs[1] === 'appointments' && method === 'get') {
       const list = [...db.appointments].sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       return paginated(
@@ -394,6 +401,301 @@ export function handleRequest(
   throw new ApiError(404, 'Rota não encontrada no mock')
 }
 
+/* ---------------- business-verification (paridade mínima com o backend) ----------------
+ *
+ * Motivo: o primeiro acesso pede `me/business-verification` (fechamento do P-4).
+ * SEM este handler o mock devolvia 404 e o `WorkspaceGate` usava `availableModes=[]`
+ * (sem customerProfile no register) para mostrar o seletor de modo no lugar do
+ * onboarding. Validações de domínio espelham as regras críticas do backend:
+ * CNPJ 14 dígitos / CPF 11 dígitos; COMPANY exige CPF do responsável;
+ * requeridos: COMPANY → COMPROVANTE_CNPJ; INDIVIDUAL → CPF_FRENTE/CPF_VERSO.
+ * O upload real (PUT) é interceptado em RAM por `mockUploadStore` (ver index.ts);
+ * o complete confere a presença do objeto e NÃO recalcula sha256 (simplificação
+ * documentada: no backend o hash é validado; aqui interessa o fluxo de UX).
+ */
+
+export const mockUploadStore = new Map<string, { sizeBytes: number; contentType: string }>()
+
+const MOCK_MAX_ATTEMPTS = 3
+const MOCK_PRESIGN_TTL_SECONDS = 60
+const MOCK_ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+const MOCK_SIZE_LIMITS: Record<string, number> = {
+  CPF_FRENTE: 10 * 1024 * 1024,
+  CPF_VERSO: 10 * 1024 * 1024,
+  CPF_SELFIE: 10 * 1024 * 1024,
+  COMPROVANTE_CNPJ: 15 * 1024 * 1024,
+}
+const MOCK_REQUIRED_DOCS: Record<string, string[]> = {
+  COMPANY: ['COMPROVANTE_CNPJ'],
+  INDIVIDUAL: ['CPF_FRENTE', 'CPF_VERSO'],
+}
+const MOCK_ALLOWED_DOCS: Record<string, string[]> = {
+  COMPANY: ['COMPROVANTE_CNPJ'],
+  INDIVIDUAL: ['CPF_FRENTE', 'CPF_VERSO', 'CPF_SELFIE'],
+}
+
+function mockDigits(value: unknown): string {
+  return String(value ?? '').replace(/\D/g, '')
+}
+
+function latestVerification(userId: string) {
+  const db = getDb()
+  return (
+    db.businessVerifications
+      .filter((v) => v.ownerUserId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+  )
+}
+
+function serializeVerification(v: MockBusinessVerification | null) {
+  if (!v) {
+    return {
+      verificationId: null,
+      status: null,
+      businessType: null,
+      document: null,
+      tradeName: null,
+      legalName: null,
+      responsibleName: null,
+      responsibleCpf: null,
+      categoryId: null,
+      phone: null,
+      timezone: null,
+      attendanceType: null,
+      address: null,
+      latitude: null,
+      longitude: null,
+      attemptCount: 0,
+      maxAttempts: MOCK_MAX_ATTEMPTS,
+      canResubmit: false,
+      requiredDocumentTypes: [],
+      submittedDocumentTypes: [],
+      missingDocumentTypes: [],
+      submittedAt: null,
+      decidedAt: null,
+      expiresAt: null,
+      rejectionReason: null,
+      rejectionComment: null,
+      approvedBusinessId: null,
+    }
+  }
+  const submitted = v.documents.filter((d) => d.status === 'ACTIVE').map((d) => d.documentType)
+  const missing = v.requiredDocumentTypes.filter((t) => !submitted.includes(t))
+  return {
+    verificationId: v.id,
+    status: v.status,
+    businessType: v.businessType,
+    document: v.document,
+    tradeName: v.tradeName,
+    legalName: v.legalName,
+    responsibleName: v.responsibleName,
+    responsibleCpf: v.responsibleCpf,
+    categoryId: v.categoryId,
+    phone: v.phone,
+    timezone: v.timezone,
+    attendanceType: v.attendanceType,
+    address: null,
+    latitude: null,
+    longitude: null,
+    attemptCount: v.attemptCount,
+    maxAttempts: v.maxAttempts,
+    canResubmit: v.attemptCount < v.maxAttempts,
+    requiredDocumentTypes: v.requiredDocumentTypes,
+    submittedDocumentTypes: submitted,
+    missingDocumentTypes: missing,
+    submittedAt: v.submittedAt,
+    decidedAt: v.decidedAt,
+    expiresAt: v.expiresAt,
+    rejectionReason: v.rejectionReason,
+    rejectionComment: v.rejectionComment,
+    approvedBusinessId: v.approvedBusinessId,
+  }
+}
+
+function assertVerificationDocRules(payload: { businessType?: unknown; document?: unknown; responsibleCpf?: unknown }) {
+  const businessType = String(payload.businessType ?? '')
+  const digits = mockDigits(payload.document)
+  if (businessType === 'COMPANY') {
+    if (digits.length !== 14) throw new ApiError(400, 'CNPJ deve ter 14 dígitos.')
+    if (mockDigits(payload.responsibleCpf).length !== 11) {
+      throw new ApiError(400, 'CPF do responsável é obrigatório para pessoa jurídica.')
+    }
+    return
+  }
+  if (digits.length !== 11) throw new ApiError(400, 'CPF deve ter 11 dígitos.')
+}
+
+function handleBusinessVerification(method: Method, segs: string[], body: any): MockResponse {
+  const db = getDb()
+  const user = currentUser()
+  if (!user) throw new ApiError(401, 'Unauthorized')
+
+  /** Solicitação "aberta" = ainda em preenchimento/análise (paridade com findOpenByOwner). */
+  const open = () => {
+    const v = latestVerification(user.id)
+    return v && (v.status === 'DRAFT' || v.status === 'PENDING' || v.status === 'REJECTED') ? v : null
+  }
+
+  if (segs.length === 0 && method === 'get') {
+    return ok(serializeVerification(latestVerification(user.id)))
+  }
+
+  if (segs.length === 0 && method === 'post') {
+    const { businessType, document: doc, tradeName, categoryId } = body || {}
+    if (!businessType || !doc || !tradeName || !categoryId) {
+      throw new ApiError(400, 'Dados obrigatórios ausentes.')
+    }
+    assertVerificationDocRules(body)
+    const existing = open()
+    if (existing) return ok(serializeVerification(existing))
+    const now = new Date().toISOString()
+    const created: MockBusinessVerification = {
+      id: nextId('verif'),
+      ownerUserId: user.id,
+      status: 'DRAFT',
+      businessType,
+      document: mockDigits(doc),
+      tradeName: String(tradeName),
+      legalName: body.legalName ?? null,
+      responsibleName: body.responsibleName ?? null,
+      responsibleCpf: businessType === 'INDIVIDUAL' ? mockDigits(doc) : mockDigits(body.responsibleCpf),
+      categoryId: String(categoryId),
+      phone: body.phone ?? null,
+      timezone: body.timezone ?? null,
+      attendanceType: body.attendanceType ?? null,
+      attemptCount: 0,
+      maxAttempts: MOCK_MAX_ATTEMPTS,
+      requiredDocumentTypes: MOCK_REQUIRED_DOCS[businessType] ?? [],
+      documents: [],
+      submittedAt: null,
+      decidedAt: null,
+      expiresAt: null,
+      rejectionReason: null,
+      rejectionComment: null,
+      approvedBusinessId: null,
+      createdAt: now,
+    }
+    db.businessVerifications.push(created)
+    saveDb()
+    return ok(serializeVerification(created))
+  }
+
+  if (segs.length === 0 && method === 'patch') {
+    const current = open()
+    if (!current) throw new ApiError(404, 'Nenhuma solicitação em andamento.')
+    if (current.status === 'PENDING') throw new ApiError(409, 'A solicitação já está em análise.')
+    const merged = { ...current, ...body }
+    assertVerificationDocRules({
+      businessType: merged.businessType,
+      document: merged.document,
+      responsibleCpf: merged.responsibleCpf,
+    })
+    Object.assign(current, {
+      businessType: merged.businessType,
+      document: mockDigits(merged.document),
+      tradeName: merged.tradeName,
+      legalName: merged.legalName ?? null,
+      responsibleName: merged.responsibleName ?? null,
+      responsibleCpf:
+        merged.businessType === 'INDIVIDUAL' ? mockDigits(merged.document) : mockDigits(merged.responsibleCpf),
+      categoryId: merged.categoryId,
+      phone: merged.phone ?? null,
+      timezone: merged.timezone ?? null,
+      attendanceType: merged.attendanceType ?? null,
+    })
+    saveDb()
+    return ok(serializeVerification(current))
+  }
+
+  if (segs[0] === 'submit' && method === 'post') {
+    const current = open()
+    if (!current) throw new ApiError(404, 'Nenhuma solicitação em andamento.')
+    if (current.status === 'PENDING') throw new ApiError(409, 'A solicitação já foi enviada.')
+    if (current.attemptCount >= current.maxAttempts) {
+      throw new ApiError(409, 'Limite de tentativas atingido.')
+    }
+    if (current.businessType === 'COMPANY' && (!current.legalName || !current.responsibleName)) {
+      throw new ApiError(400, 'Campos obrigatórios ausentes: legalName, responsibleName.')
+    }
+    const submitted = current.documents.filter((d) => d.status === 'ACTIVE').map((d) => d.documentType)
+    const missing = current.requiredDocumentTypes.filter((t) => !submitted.includes(t))
+    if (missing.length > 0) {
+      throw new ApiError(400, `Documentos obrigatórios ausentes: ${missing.join(', ')}.`)
+    }
+    current.status = 'PENDING'
+    current.attemptCount += 1
+    current.submittedAt = new Date().toISOString()
+    saveDb()
+    return ok(serializeVerification(current))
+  }
+
+  if (segs[0] === 'cancel' && method === 'post') {
+    const current = open()
+    if (!current) throw new ApiError(404, 'Nenhuma solicitação em andamento.')
+    if (current.status === 'PENDING') throw new ApiError(409, 'A solicitação já está em análise.')
+    current.status = 'CANCELLED'
+    current.decidedAt = new Date().toISOString()
+    saveDb()
+    return ok(serializeVerification(current))
+  }
+
+  if (segs[0] === 'documents' && segs[1] === 'presign' && method === 'post') {
+    const current = open()
+    if (!current) throw new ApiError(404, 'Nenhuma solicitação em andamento.')
+    if (current.status === 'PENDING') throw new ApiError(409, 'A solicitação já está em análise.')
+    const { documentType, contentType } = body || {}
+    if (!documentType || !MOCK_ALLOWED_DOCS[current.businessType]?.includes(documentType)) {
+      throw new ApiError(409, `O documento ${documentType} não se aplica a uma solicitação ${current.businessType}.`)
+    }
+    const ext = contentType === 'application/pdf' ? 'pdf' : contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg'
+    const key = `documents/${current.id}/${documentType}/${crypto.randomUUID()}.${ext}`
+    return ok({
+      documentType,
+      url: `mock-upload://${key}`,
+      storageKey: key,
+      expiresAt: new Date(Date.now() + MOCK_PRESIGN_TTL_SECONDS * 1000).toISOString(),
+      maxSizeBytes: MOCK_SIZE_LIMITS[documentType] ?? MOCK_SIZE_LIMITS.COMPROVANTE_CNPJ,
+      allowedContentTypes: [...MOCK_ALLOWED_MIME],
+    })
+  }
+
+  if (segs[0] === 'documents' && segs[1] === 'complete' && method === 'post') {
+    const current = open()
+    if (!current) throw new ApiError(404, 'Nenhuma solicitação em andamento.')
+    if (current.status === 'PENDING') throw new ApiError(409, 'A solicitação já está em análise.')
+    const { documentType, storageKey, sha256 } = body || {}
+    if (!documentType || !storageKey || !sha256) throw new ApiError(400, 'documentType, storageKey e sha256 são obrigatórios.')
+    const expectedPrefix = `documents/${current.id}/${documentType}/`
+    if (!String(storageKey).startsWith(expectedPrefix)) {
+      throw new ApiError(409, 'A chave do objeto não pertence a esta solicitação.')
+    }
+    const stored = mockUploadStore.get(String(storageKey))
+    if (!stored) {
+      throw new ApiError(404, 'Objeto não encontrado no storage. Faça o upload antes de concluir.')
+    }
+    for (const doc of current.documents.filter((d) => d.documentType === documentType && d.status === 'ACTIVE')) {
+      doc.status = 'SUPERSEDED'
+    }
+    const version = current.documents.filter((d) => d.documentType === documentType).length + 1
+    const created: MockVerificationDocument = {
+      id: nextId('docv'),
+      documentType: String(documentType),
+      version,
+      status: 'ACTIVE',
+      sizeBytes: stored.sizeBytes,
+      mimeType: stored.contentType,
+      storageKey: String(storageKey),
+      createdAt: new Date().toISOString(),
+    }
+    current.documents.push(created)
+    saveDb()
+    return ok({ documentId: created.id, version: created.version })
+  }
+
+  throw new ApiError(404, 'Rota não encontrada no mock')
+}
+
+
 /* ------------------------------------------------ */
 function handleAuth(method: Method, segs: string[], body: any): MockResponse {
   const db = getDb()
@@ -415,6 +717,8 @@ function handleAuth(method: Method, segs: string[], body: any): MockResponse {
         createdAt: now,
       }
       db.users.push(user)
+      // paridade com o backend (prisma-user.repository): register cria customerProfile
+      db.customerProfiles.push({ id: `cp_${id}`, userId: id, reputation: 0, strikes: 0 })
     }
     user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString()
     user.status = 'ACTIVE'

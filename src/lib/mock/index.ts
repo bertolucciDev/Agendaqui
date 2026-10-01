@@ -1,6 +1,6 @@
 import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { getDb } from './db'
-import { handleRequest, ApiError } from './handlers'
+import { handleRequest, ApiError, mockUploadStore } from './handlers'
 import { getStoredBusinesses, saveStoredBusiness } from '@/lib/business-store'
 
 export function isMockEnabled(): boolean {
@@ -88,5 +88,23 @@ export function initMock() {
   seedStoredBusiness()
   const adapter = createMockAdapter()
   axios.defaults.adapter = adapter
+
+  // O pipeline de verificação faz `fetch(presign.url, { method: 'PUT' })` DIRETO
+  // (fora do axios). No mock, a URL assinada usa o esquema `mock-upload://` —
+  // interceptamos aqui e gravamos o tamanho real para o `complete` conferir.
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    if (url.startsWith('mock-upload://')) {
+      const key = url.slice('mock-upload://'.length)
+      const body = init?.body as Blob | null | undefined
+      const sizeBytes = body && typeof body.size === 'number' ? body.size : 0
+      const contentType = body?.type || 'application/octet-stream'
+      mockUploadStore.set(key, { sizeBytes, contentType })
+      return new Response('', { status: 200 })
+    }
+    return originalFetch(input, init)
+  }) as typeof fetch
+
   return adapter
 }
