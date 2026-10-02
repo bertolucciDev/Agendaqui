@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AppProviders } from '@/app/providers'
 import { useAuth } from '@/app/providers/auth'
 import { lazy, Suspense } from 'react'
@@ -89,6 +89,22 @@ export default function App() {
             <Route path="/appointments/new" element={<AppointmentNewPage />} />
             <Route path="/appointments/*" element={<AppointmentsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+
+          {/* Onboarding: mesmos guards (ProtectedRoute + FirstBusinessGuard +
+              WorkspaceGate), mas SEM o chrome do dashboard (sidebar/header).
+              A mudança é só de layout — nenhuma regra de guarda foi alterada. */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <FirstBusinessGuard>
+                  <WorkspaceGate>
+                    <Outlet />
+                  </WorkspaceGate>
+                </FirstBusinessGuard>
+              </ProtectedRoute>
+            }
+          >
               <Route path="/onboarding/business" element={<OnboardingBusinessPage />} />
               {/* Acompanhamento sob /onboarding* — FirstBusinessGuard é congelado. */}
               <Route
