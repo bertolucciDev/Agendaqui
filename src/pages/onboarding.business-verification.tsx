@@ -52,17 +52,12 @@ const STATUS_VIEW: Record<string, { title: string; body: string; tone: string }>
 }
 
 /**
- * Caminho de ação por estado:
- * - REJECTED com `canResubmit`: o rascunho rejeitado é EDITÁVEL no onboarding
- *   (o backend aceita PATCH em DRAFT/REJECTED);
- * - EXPIRED/CANCELLED: a solicitação está encerrada — o onboarding abre uma
- *   NOVA (o backend só reusa a solicitação aberta);
- * - demais estados não recebem ação aqui.
+ * Caminho de ação por estado (paridade com o backend):
+ * - REJECTED: edição direta não existe — a write-path (`findOpenByOwner`) só
+ *   aceita DRAFT/PENDING, e a reabertura é via `request-resend` da plataforma,
+ *   que devolve a solicitação para DRAFT. Sem CTA aqui;
+ * - EXPIRED/CANCELLED: encerradas — o onboarding abre uma NOVA verificação.
  */
-function canOfferEdit(data: { status: BusinessVerification['status']; canResubmit: boolean }): boolean {
-  return data.status === 'REJECTED' && data.canResubmit
-}
-
 function canReopen(data: { status: BusinessVerification['status'] }): boolean {
   return data.status === 'EXPIRED' || data.status === 'CANCELLED'
 }
@@ -167,12 +162,6 @@ export default function OnboardingBusinessVerificationPage() {
                 ))}
               </ul>
             </div>
-          ) : null}
-
-          {canOfferEdit(data) ? (
-            <Link to="/onboarding/business">
-              <Button variant="outline">Editar solicitação</Button>
-            </Link>
           ) : null}
 
           {canReopen(data) ? (

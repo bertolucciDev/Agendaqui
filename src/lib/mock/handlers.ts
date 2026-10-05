@@ -530,10 +530,10 @@ function handleBusinessVerification(method: Method, segs: string[], body: any): 
   const user = currentUser()
   if (!user) throw new ApiError(401, 'Unauthorized')
 
-  /** Solicitação "aberta" = ainda em preenchimento/análise (paridade com findOpenByOwner). */
+  /** Solicitação "aberta" = em preenchimento/análise (paridade com findOpenByOwner: DRAFT/PENDING). */
   const open = () => {
     const v = latestVerification(user.id)
-    return v && (v.status === 'DRAFT' || v.status === 'PENDING' || v.status === 'REJECTED') ? v : null
+    return v && (v.status === 'DRAFT' || v.status === 'PENDING') ? v : null
   }
 
   if (segs.length === 0 && method === 'get') {

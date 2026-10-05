@@ -7,7 +7,10 @@ import type { BusinessVerification } from '@/types/business-verification'
  * `missingDocumentTypes` e `maxAttempts`. Regra do domínio:
  *
  * - DRAFT                  → edita, envia documentos, submete
- * - REJECTED e canResubmit → edita, reenvia documentos, submete de novo
+ * - REJECTED               → NÃO editável pelo titular: write-paths do backend
+ *                            (findOpenByOwner) só aceitam DRAFT/PENDING, e a
+ *                            reabertura acontece só via `request-resend` da
+ *                            plataforma (que devolve para DRAFT)
  * - PENDING                → nada editável (decisão em análise)
  * - APPROVED               → nada editável
  * - EXPIRED / CANCELLED    → encerrado; a próxima verificação é uma nova
@@ -19,7 +22,7 @@ import type { BusinessVerification } from '@/types/business-verification'
  */
 
 export function canEdit(status: BusinessVerification['status']): boolean {
-  return status === 'DRAFT' || status === 'REJECTED'
+  return status === 'DRAFT'
 }
 
 export function canUploadDocuments(status: BusinessVerification['status']): boolean {

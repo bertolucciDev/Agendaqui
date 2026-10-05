@@ -11,7 +11,6 @@ const LoginPage = lazy(() => import('@/pages/login'))
 const RegisterPage = lazy(() => import('@/pages/register'))
 const DashboardPage = lazy(() => import('@/pages/dashboard'))
 const BusinessesPage = lazy(() => import('@/pages/businesses'))
-const BusinessNewPage = lazy(() => import('@/pages/businesses.new'))
 const LocationsPage = lazy(() => import('@/pages/locations'))
 const LocationNewPage = lazy(() => import('@/pages/locations.new'))
 const ServicesPage = lazy(() => import('@/pages/services'))
@@ -79,7 +78,9 @@ export default function App() {
             >
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/businesses" element={<BusinessesPage />} />
-            <Route path="/businesses/new" element={<BusinessNewPage />} />
+            {/* P-3: criação direta de Business não existe mais (POST /businesses = 410,
+                B-1). Quem clicar nos atalhos antigos cai no fluxo de verificação. */}
+            <Route path="/businesses/new" element={<Navigate to="/onboarding/business" replace />} />
             <Route path="/locations" element={<LocationsPage />} />
             <Route path="/locations/new" element={<LocationNewPage />} />
             <Route path="/services" element={<ServicesPage />} />

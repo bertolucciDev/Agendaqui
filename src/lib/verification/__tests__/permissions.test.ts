@@ -44,9 +44,9 @@ function verification(overrides: Partial<BusinessVerification> = {}): BusinessVe
 }
 
 describe('permissions derivadas do contrato', () => {
-  it('DRAFT e REJECTED são editáveis; PENDING, APPROVED, EXPIRED e CANCELLED não', () => {
+  it('só DRAFT é editável (backend: findOpenByOwner só aceita DRAFT/PENDING)', () => {
     expect(canEdit('DRAFT')).toBe(true)
-    expect(canEdit('REJECTED')).toBe(true)
+    expect(canEdit('REJECTED')).toBe(false)
     expect(canEdit('PENDING')).toBe(false)
     expect(canEdit('APPROVED')).toBe(false)
     expect(canEdit('EXPIRED')).toBe(false)
@@ -56,7 +56,7 @@ describe('permissions derivadas do contrato', () => {
 
   it('upload de documento só é permitido nos mesmos estados editáveis', () => {
     expect(canUploadDocuments('DRAFT')).toBe(true)
-    expect(canUploadDocuments('REJECTED')).toBe(true)
+    expect(canUploadDocuments('REJECTED')).toBe(false)
     expect(canUploadDocuments('PENDING')).toBe(false)
   })
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -90,7 +90,7 @@ const UPLOAD_COPY: Record<DocumentUploadPhase, string> = {
 export default function OnboardingBusinessPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { session, refreshSession } = useSession()
+  const { refreshSession } = useSession()
   const flow = useBusinessVerificationFlow()
 
   const [step, setStep] = useState<'type' | 'form'>('type')
@@ -99,7 +99,6 @@ export default function OnboardingBusinessPage() {
   const [responsibleCpfDisplay, setResponsibleCpfDisplay] = useState('')
   const hydratedFor = useRef<string | null>(null)
 
-  const alreadyHasBusiness = !!session && session.businesses.length > 0
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: categoriesApi.list,
@@ -174,17 +173,16 @@ export default function OnboardingBusinessPage() {
     navigate('/dashboard', { replace: true })
   }, [navigate, queryClient, refreshSession, refetch, status])
 
-  // PENDING é estado de ESPERA: nada a editar, então vai para o acompanhamento.
-  // REJECTED permanece aqui (é editável até o limite de tentativas);
-  // EXPIRED/CANCELLED voltam como formulário pré-preenchido para uma NOVA
+  // PENDING/REJECTED são estados de ESPERA/ENCERRADO: nada a editar no titular
+  // (replay backend: write-paths só aceitam DRAFT; REJECTED reabre via admin
+  // `request-resend`). Eles vão para a tela de acompanhamento.
+  // EXPIRED/CANCELLED permanecem: formulário pré-preenchido abre NOVA
   // solicitação — `submitForm` decide create vs update por `canEdit(status)`.
   useEffect(() => {
-    if (status === 'PENDING') {
+    if (status === 'PENDING' || status === 'REJECTED') {
       navigate('/onboarding/business-verification', { replace: true })
     }
   }, [navigate, status])
-
-  if (alreadyHasBusiness) return <Navigate to="/dashboard" replace />
 
   if (isLoading) {
     return (
