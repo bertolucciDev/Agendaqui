@@ -52,16 +52,17 @@ const refreshSession = vi.fn()
 // dependência) re-executava em laço e afogava a navegação (flake na suíte
 // completa). A instabilidade era do mock, não da página.
 const stableRefreshSession = (...a: unknown[]) => refreshSession(...a)
+let uiSession: Record<string, unknown> = {
+  user: { id: 'u_new' },
+  availableModes: ['CUSTOMER'],
+  businesses: [],
+  customerProfile: { id: 'u_new' },
+  isPlatformAdmin: false,
+  preferences: { activeMode: null, activeBusinessId: null },
+}
 vi.mock('@/app/providers/session', () => ({
   useSession: () => ({
-    session: {
-      user: { id: 'u_new' },
-      availableModes: ['CUSTOMER'],
-      businesses: [],
-      customerProfile: { id: 'u_new' },
-      isPlatformAdmin: false,
-      preferences: { activeMode: null, activeBusinessId: null },
-    },
+    session: uiSession,
     isSessionLoading: false,
     refreshSession: stableRefreshSession,
   }),
@@ -256,6 +257,14 @@ beforeEach(() => {
   localStorage.clear()
   vi.clearAllMocks()
   sessionState = sessionFixture()
+  uiSession = {
+    user: { id: 'u_new' },
+    availableModes: ['CUSTOMER'],
+    businesses: [],
+    customerProfile: { id: 'u_new' },
+    isPlatformAdmin: false,
+    preferences: { activeMode: null, activeBusinessId: null },
+  }
   ;(globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
     new Response('', { status: 200 }),
   )
@@ -594,7 +603,7 @@ describe('O-11/O-12/O-13 — estados de encerramento', () => {
     )
   })
 
-  it('O-11: REJECTED NÃO é redirecionado — o formulário fica editável (correção do bounce)', async () => {
+  it('O-11: REJECTED encaminha para o acompanhamento (reabertura é via request-resend da plataforma)', async () => {
     mount(
       output({
         status: 'REJECTED',
@@ -604,16 +613,31 @@ describe('O-11/O-12/O-13 — estados de encerramento', () => {
         missingDocumentTypes: ['COMPROVANTE_CNPJ'],
       }),
     )
-    // Regressão do P-2: o link "Editar solicitação" da tela de acompanhamento
-    // aponta para cá; redirecionar o REJECTED de volta tornava a correção
-    // impossível. A tela precisa ficar editável.
-    await waitFor(() => expect(screen.getByLabelText('Nome fantasia')).toBeTruthy())
-    expect(screen.getByTestId('path').textContent).not.toBe('/onboarding/business-verification')
-
-    fireEvent.change(screen.getByLabelText('Nome fantasia'), { target: { value: 'Reenvio' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }))
-    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
+    // P-2 refinado pela paridade com o backend: a write-path (`findOpenByOwner`)
+    // só enxerga DRAFT/PENDING, então REJECTED não é editável pelo titular —
+    // a reabertura ocorre no admin. Redirecionar para o acompanhamento evita o
+    // bounce; quando a plataforma reabrir, o status volta a DRAFT e o formulário
+    // fica acessível de novo.
+    await waitFor(() =>
+      expect(screen.getByTestId('path').textContent).toBe('/onboarding/business-verification'),
+    )
+    expect(update).not.toHaveBeenCalled()
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it('P-3: dono de negócio NÃO é expulso do onboarding — pode abrir nova verificação', async () => {
+    uiSession = {
+      ...uiSession,
+      availableModes: ['OWNER', 'CUSTOMER'],
+      businesses: [{ id: 'biz_existente' }],
+    }
+    mount(EMPTY_OUTPUT)
+    // Antes: `alreadyHasBusiness` mandava para /dashboard. Agora a tela abre
+    // para cadastrar mais um negócio (a criação direta morreu com o 410).
+    await waitFor(() =>
+      expect(screen.getByText('Como seu negócio está registrado?')).toBeTruthy(),
+    )
+    expect(screen.getByTestId('path').textContent).not.toBe('/dashboard')
   })
 
   it.each<[string]>([['EXPIRED'], ['CANCELLED']])(

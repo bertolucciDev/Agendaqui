@@ -141,25 +141,22 @@ describe('rota de acompanhamento', () => {
     expect(screen.getByTestId('rejection-label').textContent).toBe('Documento ilegível')
     expect(screen.getByTestId('rejection-comment').textContent).toBe('A foto está sem foco.')
     expect(screen.getByTestId('rejection-attempts').textContent).toContain('Tentativa 2 de 3')
-    // REJECTED ainda é editável: o usuário corrige e reenvia.
-    expect(screen.getByRole('button', { name: 'Editar solicitação' })).toBeTruthy()
-  })
-
-  it('O-11: REJECTED na última tentativa não oferece mais edição', async () => {
-    mount(output({ status: 'REJECTED', attemptCount: 3, canResubmit: false, rejectionReason: 'OUTRO' }))
-
-    await waitFor(() => expect(screen.getByText('Solicitação rejeitada')).toBeTruthy())
+    // REJECTED NÃO oferece edição direta: a write-path do backend só aceita
+    // DRAFT/PENDING; a reabertura é via request-resend da plataforma.
     expect(screen.queryByRole('button', { name: 'Editar solicitação' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Abrir nova verificação' })).toBeNull()
   })
 
-  it('O-12: EXPIRED mostra que a solicitação expirou', async () => {
+  it('O-12: EXPIRED avisa e oferece abrir NOVA verificação', async () => {
     mount(output({ status: 'EXPIRED' }))
     await waitFor(() => expect(screen.getByText('Verificação expirada')).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'Abrir nova verificação' })).toBeTruthy()
   })
 
-  it('O-13: CANCELLED mostra estado encerrado', async () => {
+  it('O-13: CANCELLED avisa e oferece abrir NOVA verificação', async () => {
     mount(output({ status: 'CANCELLED' }))
     await waitFor(() => expect(screen.getByText('Solicitação cancelada')).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'Abrir nova verificação' })).toBeTruthy()
   })
 
   it('sem solicitação, convida a começar a verificação', async () => {
