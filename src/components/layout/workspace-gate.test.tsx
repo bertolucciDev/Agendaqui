@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('@/app/providers/session', () => ({
   useSession: () => ({
@@ -43,10 +44,24 @@ beforeEach(() => vi.clearAllMocks())
 /* FE-MVP-01 — teste 13: CUSTOMER fora da seleção administrativa do MVP (contrato intocado). */
 describe('WorkspaceGate — CUSTOMER fora da UX administrativa', () => {
   it('seleção ambígua exibe modos administrativos, mas NÃO CUSTOMER', () => {
-    render(<WorkspaceGate>{children}</WorkspaceGate>)
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <WorkspaceGate>{children}</WorkspaceGate>
+      </MemoryRouter>,
+    )
     expect(screen.getByText('Como você quer entrar?')).toBeTruthy()
     expect(screen.getByText('Gestão')).toBeTruthy()
     expect(screen.getByText('Profissional')).toBeTruthy()
     expect(screen.queryByText('Cliente')).toBeNull()
+  })
+
+  it('rotas /onboarding* nunca são cobertas pelo seletor (D8 precisa rodar nelas)', () => {
+    render(
+      <MemoryRouter initialEntries={['/onboarding/business']}>
+        <WorkspaceGate>{children}</WorkspaceGate>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByText('Como você quer entrar?')).toBeNull()
+    expect(screen.getByTestId('content')).toBeTruthy()
   })
 })
