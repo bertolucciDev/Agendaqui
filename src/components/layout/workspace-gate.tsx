@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useSession } from '@/app/providers/session'
 import { useWorkspace } from '@/app/providers/workspace'
 import { Card, CardContent } from '@/components/ui/card'
@@ -19,6 +20,7 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
   const { session, isSessionLoading } = useSession()
   const { activeMode, businessesForMode, needsSelection, switchMode, switchBusiness } = useWorkspace()
   const [pickedMode, setPickedMode] = useState<SessionMode | null>(null)
+  const location = useLocation()
 
   if (isSessionLoading) {
     return (
@@ -27,6 +29,11 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
       </div>
     )
   }
+
+  // /onboarding* é o fluxo de RESOLUÇÃO de negócio — e é lá que o D8 dispara
+  // quando a verificação vira APPROVED. Bloqueá-lo aqui criaria deadlock:
+  // o D8 nunca escreveria a preferência e o picker nunca resolveria sozinho.
+  if (location.pathname.startsWith('/onboarding')) return <>{children}</>
 
   if (!session || !needsSelection) return <>{children}</>
 
