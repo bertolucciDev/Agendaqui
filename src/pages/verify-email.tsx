@@ -45,7 +45,12 @@ export default function VerifyEmailPage() {
 
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) value = value.slice(-1)
-    if (!/^\d*$/.test(value)) return
+    // O backend emite códigos ALFANUMÉRICOS (ex.: K3R7M2, alfabeto sem I/L/O/0/1)
+    // e a comparação é case-sensitive — aqui normalizamos para maiúsculas e só
+    // permitimos os caracteres válidos; antes aceitávamos só dígitos e o código
+    // real era impossível de digitar (bug encontrado na integração).
+    if (!/^[a-zA-Z0-9]$/.test(value) && value !== '') return
+    value = value.toUpperCase()
 
     const newCode = [...code]
     newCode[index] = value
@@ -64,7 +69,7 @@ export default function VerifyEmailPage() {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault()
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    const pasted = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
     const newCode = pasted.split('').concat(Array(6 - pasted.length).fill(''))
     setCode(newCode)
     inputRefs.current[Math.min(pasted.length, 5)]?.focus()
@@ -167,7 +172,8 @@ export default function VerifyEmailPage() {
                 key={index}
                 ref={(el) => { inputRefs.current[index] = el }}
                 type="text"
-                inputMode="numeric"
+                inputMode="text"
+                autoCapitalize="characters"
                 maxLength={1}
                 value={digit}
                 onChange={(e) => handleChange(index, e.target.value)}

@@ -14,7 +14,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/agendaqui-api': {
-        target: 'https://agendaqui-api.onrender.com',
+        target: process.env.VITE_API_PROXY_TARGET ?? 'https://agendaqui-api.onrender.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/agendaqui-api/, ''),
         secure: true,
