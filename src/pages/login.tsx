@@ -5,9 +5,10 @@ import { Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
+import { extractApiMessage, extractApiStatus } from '@/lib/api-error'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -23,16 +24,22 @@ export default function LoginPage() {
     setIsSubmitting(true)
     try {
       await login(data.email, data.password)
-      toast.success('Login realizado!')
-    } catch (err: any) {
-      const msg: string = err?.response?.data?.message ?? ''
-      if (err?.response?.status === 403 && /verifique seu e-mail/i.test(msg)) {
-        toast.error('Verifique seu e-mail antes de fazer login')
+      notify.success('Login realizado!')
+    } catch (err: unknown) {
+      const status = extractApiStatus(err)
+      const message = extractApiMessage(err)
+
+      if (status === 403 && /verifique seu e-mail|email n[aã]o verificad/i.test(message ?? '')) {
+        notify.error('Verifique seu e-mail antes de fazer login')
         navigate(`/verify-email?email=${encodeURIComponent(data.email)}`)
-      } else if (msg?.includes('Invalid credentials')) {
-        toast.error('E-mail ou senha inválidos')
+      } else if (status === 403 && /bloquead/i.test(message ?? '')) {
+        notify.error(message ?? 'Sua conta está bloqueada. Fale com o suporte.')
+      } else if (status === 401 || /credenciais inv[aá]lidas|invalid credentials/i.test(message ?? '')) {
+        notify.error('E-mail ou senha inválidos')
+      } else if (status === 400 && message) {
+        notify.error(message)
       } else {
-        toast.error('Erro ao fazer login')
+        notify.error(message ?? 'Erro ao fazer login')
       }
     } finally {
       setIsSubmitting(false)
@@ -67,7 +74,7 @@ export default function LoginPage() {
         <main className="flex-1 flex items-center justify-center p-8 bg-surface">
           <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
-            <Link to="/" className="text-lg font-bold text-primary-600 font-display">Agendaqui</Link>
+            <Link to="/" className="text-lg font-bold text-primary-500 font-display">Agendaqui</Link>
           </div>
 
           <h1 className="text-2xl font-bold text-foreground font-display">Bem-vindo de volta</h1>

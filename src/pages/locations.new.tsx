@@ -5,7 +5,7 @@ import { useActiveBusiness } from '@/app/hooks/use-active-business'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { locationSchema, type LocationFormData } from '@/lib/validations'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 import { ArrowLeft, MapPin } from 'lucide-react'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
@@ -35,15 +35,15 @@ export default function NewLocationPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] })
-      toast.success('Local cadastrado!')
+      notify.success('Local cadastrado!')
       navigate('/locations')
     },
-    onError: () => toast.error('Erro ao cadastrar local'),
+    onError: () => notify.error('Erro ao cadastrar local'),
   })
 
   const onSubmit = (data: LocationFormData) => {
     if (!businessId) {
-      toast.error('Cadastre um negócio primeiro')
+      notify.warning('Cadastre um negócio primeiro')
       return
     }
     createMutation.mutate(data)

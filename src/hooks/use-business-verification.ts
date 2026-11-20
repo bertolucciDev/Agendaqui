@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { businessVerificationApi } from '@/services/api/business-verification'
+import { useSession } from '@/app/providers/session'
 import { sessionApi } from '@/services/api/session'
 import { createD8Attempt, d8RetryPredicate, type D8Target } from '@/lib/d8/d8-writer'
 import type { D8Decision } from '@/lib/d8/evaluate-d8'
@@ -99,6 +100,29 @@ export function useBusinessVerification(): UseBusinessVerificationResult {
      */
     refetch,
   }
+}
+
+/** Observa pedidos pendentes nas listas sem disparar o escritor D8. */
+export function usePendingBusinessVerification(): BusinessVerification | null {
+  const queryClient = useQueryClient()
+  const { session } = useSession()
+  const { data } = useQuery({
+    queryKey: businessVerificationKey,
+    queryFn: businessVerificationApi.getMy,
+    enabled: !!session,
+    refetchInterval: (query) => {
+      const status = (query.state.data as BusinessVerification | undefined)?.status
+      return status === 'PENDING' ? PENDING_POLL_MS : false
+    },
+  })
+
+  useEffect(() => {
+    if (data?.status === 'APPROVED') {
+      void queryClient.invalidateQueries({ queryKey: ['session'] })
+    }
+  }, [data?.status, queryClient])
+
+  return data?.status === 'PENDING' ? data : null
 }
 
 /**

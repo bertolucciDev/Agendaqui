@@ -18,41 +18,42 @@ const toBusiness = (stored: StoredBusiness): Business => ({
   createdAt: '',
 })
 
+/**
+ * Erro lançado quando alguém tenta criar um negócio pela rota antiga.
+ *
+ * `POST /businesses` responde **410 GONE** por decisão de produto: a criação
+ * de negócios acontece exclusivamente pelo fluxo de Business Verification
+ * (`POST /me/business-verification` → documentos → `submit` → aprovação
+ * administrativa), que cria o Business + um Local + a membership OWNER de
+ * forma atômica.
+ */
+export class BusinessCreationMovedError extends Error {
+  constructor() {
+    super(
+      'A criação de negócios passou pelo fluxo de verificação. Use POST /me/business-verification.'
+    )
+    this.name = 'BusinessCreationMovedError'
+  }
+}
+
 export const businessesApi = {
+  /**
+   * @deprecated A lista de negócios do usuário vem do contrato `GET /me/session`
+   * (`session.businesses`), que é a fonte de verdade multi-tenant. Esta função
+   * lê um registro em localStorage e NÃO reflete o backend — mantenha-a apenas
+   * como compatibilidade e prefira `useSession().session.businesses`.
+   */
   list: async (): Promise<Business[]> => {
     return getStoredBusinesses().map(toBusiness)
   },
 
-  create: async (payload: {
-    name: string
-    document: string
-    type: string
-    categoryId: string
-    locationName: string
-    address: string
-    timezone: string
-    latitude?: number
-    longitude?: number
-    attendanceType?: string
-    phone?: string
-    description?: string
-  }) => {
-    const { data } = await apiClient.post<Business & {
-      businessId?: string
-      locationId?: string
-      membershipId?: string
-    }>('businesses', payload)
-
-    const businessId = data.businessId || data.id
-    const stored: StoredBusiness = {
-      businessId,
-      locationId: data.locationId || '',
-      membershipId: data.membershipId || '',
-      slug: slugify(payload.name),
-      name: payload.name,
-    }
-    saveStoredBusiness(stored)
-    return toBusiness(stored)
+  /**
+   * @deprecated `POST /businesses` responde 410. Use o fluxo de Business
+   * Verification (`src/pages/onboarding.business.tsx`). A função lança para
+   * que nenhum chamador legado passe silenciosamente.
+   */
+  create: async (): Promise<Business> => {
+    throw new BusinessCreationMovedError()
   },
 
   update: async (id: string, payload: Partial<Business>) => {
@@ -70,13 +71,37 @@ export const businessesApi = {
     return data
   },
 
+  /**
+   * `GET /businesses/:slug/services` — paginado.
+   * A rota é indexada por SLUG (não pelo id do negócio).
+   */
   getServicesBySlug: async (slug: string, page?: number, limit?: number) => {
     const params = new URLSearchParams()
     if (page) params.set('page', String(page))
     if (limit) params.set('limit', String(limit))
-    const { data } = await apiClient.get<PaginatedResponse<Service>>(
+    const { data } = await apiClient.get<PaginatedResponse<Service> | Service[]>(
       `businesses/${slug}/services?${params.toString()}`
     )
+    if (Array.isArray(data)) {
+      return { data, total: data.length, limit: data.length, offset: 0 }
+    }
     return data
   },
+}
+
+/** Registro local legado — usado apenas pelo mock e pelo onboarding antigo. */
+export function rememberBusiness(params: {
+  businessId: string
+  locationId?: string
+  membershipId?: string
+  name: string
+}): void {
+  const stored: StoredBusiness = {
+    businessId: params.businessId,
+    locationId: params.locationId ?? '',
+    membershipId: params.membershipId ?? '',
+    slug: slugify(params.name),
+    name: params.name,
+  }
+  saveStoredBusiness(stored)
 }

@@ -8,26 +8,45 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
-import toast from 'react-hot-toast'
+import { useConfirm } from '@/components/ui/use-confirm'
+import { notify } from '@/lib/notify'
+import { usePendingBusinessVerification } from '@/hooks/use-business-verification'
 
 const ROLE_LABELS: Record<string, string> = { OWNER: 'Proprietário', MANAGER: 'Gerente', EMPLOYEE: 'Profissional' }
 
 export default function BusinessesPage() {
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const { confirm, confirmDialog } = useConfirm()
   // Fonte: contrato /me/session (sem store local, sem businesses[0])
   const { session, isSessionLoading, refreshSession } = useSession()
   const { activeBusiness, switchBusiness } = useWorkspace()
   const businesses = session?.businesses ?? []
   const activeId = activeBusiness?.id
+  const pendingVerification = usePendingBusinessVerification()
 
   const deleteMutation = useMutation({
     mutationFn: businessesApi.delete,
     onSuccess: () => {
       refreshSession()
-      toast.success('Negócio removido')
+      notify.success('Negócio removido')
     },
-    onError: () => toast.error('Erro ao remover negócio'),
+    onError: (err: unknown) =>
+      notify.error(err, { retry: () => deleteMutation.mutate(deleteTarget) }),
   })
+
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+
+  const handleDelete = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: 'Remover negócio?',
+      description: `“${name}” e todos os locais, serviços e agendamentos dele serão removidos. Esta ação não pode ser desfeita.`,
+      confirmLabel: 'Remover',
+      variant: 'destructive',
+    })
+    if (!ok) return
+    setDeleteTarget(id)
+    deleteMutation.mutate(id)
+  }
 
   return (
     <>
@@ -47,7 +66,7 @@ export default function BusinessesPage() {
             <div className="flex py-16 justify-center">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
-          ) : businesses.length === 0 ? (
+          ) : businesses.length === 0 && !pendingVerification ? (
             <EmptyState
               title="Nenhum negócio cadastrado"
               description="Cadastre seu primeiro negócio para começar a receber agendamentos."
@@ -70,9 +89,9 @@ export default function BusinessesPage() {
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft">
                         <Building2 className="h-5 w-5 text-primary-500" />
                       </div>
-<div>
+                      <div>
                       <div className="flex items-center gap-1.5">
-                        <h3 className="text-sm font-semibold text-foreground">{biz.name}</h3>
+                        <h3 className="text-sm font-semibold text-foreground truncate">{biz.name}</h3>
                         {biz.id === activeId && (
                           <span className="inline-flex items-center gap-1 rounded bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary-soft-fg">
                             <CheckCircle2 className="h-3 w-3" />
@@ -98,7 +117,7 @@ export default function BusinessesPage() {
                             <button
                               onClick={() => {
                                 switchBusiness(biz.id)
-                                toast.success('Negócio ativo alterado')
+                                notify.success('Negócio ativo alterado')
                                 setMenuOpen(null)
                               }}
                             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-primary-soft"
@@ -109,7 +128,7 @@ export default function BusinessesPage() {
                         )}
                         <button
                           onClick={() => {
-                            deleteMutation.mutate(biz.id)
+                            void handleDelete(biz.id, biz.name)
                             setMenuOpen(null)
                           }}
                           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive-soft-fg hover:bg-destructive-soft"
@@ -121,15 +140,46 @@ export default function BusinessesPage() {
                     )}
                   </div>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {biz.memberships.map((m) => ROLE_LABELS[m.role] || m.role).join(' · ')}
+                  <p className="mt-3 text-xs text-muted-foreground truncate">
+                    {(() => {
+                      const roles = biz.memberships.map((m) => ROLE_LABELS[m.role] || m.role)
+                      const unique = [...new Set(roles)]
+                      const shown = unique.slice(0, 3)
+                      return shown.join(' · ') + (unique.length > 3 ? ` +${unique.length - 3}` : '')
+                    })()}
                   </p>
                 </div>
               ))}
+              {pendingVerification ? (
+                <div
+                  key={`pending-${pendingVerification.verificationId}`}
+                  aria-label={`${pendingVerification.tradeName ?? 'Novo negócio'}, pendente de aprovação`}
+                  className="card-hover p-5 opacity-60"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                      <Building2 className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h3 className="truncate text-sm font-semibold text-foreground">
+                          {pendingVerification.tradeName ?? 'Novo negócio'}
+                        </h3>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Pendente
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Enviado para análise</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
       </PageContent>
+
+      {confirmDialog}
     </>
   )
 }

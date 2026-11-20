@@ -3,42 +3,59 @@ import type {
   Appointment,
   AppointmentStatus,
   AvailableSlot,
+  Location,
   Membership,
   PaginatedResponse,
   Service,
 } from '@/types'
 
+/**
+ * Resposta crua do backend.
+ *
+ * O backend nomeia o profissional `employeeMembership` e o cliente `customer`;
+ * o contrato do front usa `employee` e `client`. Os aliases são aceitos nos
+ * dois sentidos para que o mapper funcione contra qualquer versão da API.
+ */
 interface RawSlot {
-  startsAt: string
-  endsAt: string
+  startsAt?: string
+  endsAt?: string
+  startAt?: string
+  endAt?: string
   employeeMembershipId?: string
+  professionalId?: string
+  professionalName?: string
   employeeName?: string
   position?: string
 }
 
 const toAvailableSlot = (raw: RawSlot): AvailableSlot => ({
-  startsAt: raw.startsAt,
-  endsAt: raw.endsAt,
-  employeeMembershipId: raw.employeeMembershipId,
+  startsAt: raw.startsAt ?? raw.startAt ?? '',
+  endsAt: raw.endsAt ?? raw.endAt ?? '',
+  employeeMembershipId: raw.employeeMembershipId ?? raw.professionalId,
 })
 
+/**
+ * Shape cru do agendamento. O contrato com o backend é CONGELADO e usa o
+ * vocabulário do domínio: `customerUserId`, `employeeMembershipId`,
+ * `cancellationReason`, `customer`, `employeeMembership`.
+ */
 interface RawAppointment {
   id?: string
   appointmentId?: string
   businessId?: string
   locationId?: string
   serviceId?: string
-  clientId?: string
   customerUserId?: string
   employeeMembershipId?: string
   status?: AppointmentStatus
   startsAt?: string
   endsAt?: string
   priceCents?: number
-  cancelReason?: string
+  cancellationReason?: string
   service?: Service
-  employee?: Membership
-  client?: Appointment['client']
+  employeeMembership?: Membership
+  customer?: Appointment['customer']
+  location?: Location
 }
 
 const toAppointment = (raw: RawAppointment): Appointment => ({
@@ -46,19 +63,48 @@ const toAppointment = (raw: RawAppointment): Appointment => ({
   businessId: raw.businessId || '',
   locationId: raw.locationId || '',
   serviceId: raw.serviceId || '',
-  clientId: raw.clientId || raw.customerUserId || '',
+  customerUserId: raw.customerUserId || '',
   employeeMembershipId: raw.employeeMembershipId,
   startsAt: raw.startsAt || '',
   endsAt: raw.endsAt || '',
   status: raw.status || 'PENDING',
   priceCents: raw.priceCents,
-  cancelReason: raw.cancelReason,
+  cancellationReason: raw.cancellationReason,
   service: raw.service,
-  employee: raw.employee,
-  client: raw.client,
+  employeeMembership: raw.employeeMembership,
+  customer: raw.customer,
+  location: raw.location,
 })
 
+/**
+ * O backend paginado devolve `{ data, total, limit, offset }`. As versões
+ * antigas devolviam um array puro — aceitamos os dois para não quebrar.
+ */
+function unwrapList<T>(
+  payload: T[] | PaginatedResponse<T> | null | undefined
+): { items: T[]; total: number; limit: number; offset: number } {
+  if (Array.isArray(payload)) {
+    return { items: payload, total: payload.length, limit: payload.length, offset: 0 }
+  }
+  if (payload && Array.isArray(payload.data)) {
+    return {
+      items: payload.data,
+      total: payload.total ?? payload.data.length,
+      limit: payload.limit ?? payload.data.length,
+      offset: payload.offset ?? 0,
+    }
+  }
+  return { items: [], total: 0, limit: 0, offset: 0 }
+}
+
 export const appointmentsApi = {
+  /**
+   * `POST /businesses/:businessId/appointments`
+   *
+   * O DTO do backend NÃO aceita `clientName`/`clientPhone` — e como a
+   * ValidationPipe global roda com `forbidNonWhitelisted`, enviá-los
+   * devolve HTTP 400. O cliente do agendamento é o usuário autenticado.
+   */
   create: async (
     businessId: string,
     payload: {
@@ -67,8 +113,6 @@ export const appointmentsApi = {
       startsAt: string
       endsAt: string
       employeeMembershipId?: string
-      clientName?: string
-      clientPhone?: string
     }
   ) => {
     const { data } = await apiClient.post<RawAppointment>(
@@ -78,6 +122,10 @@ export const appointmentsApi = {
     return toAppointment(data)
   },
 
+  /**
+   * `GET /businesses/:businessId/appointments` — paginado.
+   * `dateFrom`/`dateTo` aceitam data-hora ISO ou data pura (`YYYY-MM-DD`).
+   */
   listBusiness: async (
     businessId: string,
     params?: {
@@ -94,17 +142,19 @@ export const appointmentsApi = {
     if (params?.dateTo) searchParams.set('dateTo', params.dateTo)
     if (params?.limit) searchParams.set('limit', String(params.limit))
     if (params?.offset) searchParams.set('offset', String(params.offset))
-    const { data } = await apiClient.get<PaginatedResponse<RawAppointment>>(
+    const { data } = await apiClient.get<PaginatedResponse<RawAppointment> | RawAppointment[]>(
       `businesses/${businessId}/appointments?${searchParams.toString()}`
     )
+    const { items, total, limit, offset } = unwrapList(data)
     return {
-      data: data.data.map(toAppointment),
-      total: data.total,
-      limit: data.limit,
-      offset: data.offset,
+      data: items.map(toAppointment),
+      total,
+      limit,
+      offset,
     }
   },
 
+  /** `GET /me/appointments` — array puro (não paginado). */
   listMy: async (params?: {
     status?: AppointmentStatus
     dateFrom?: string
@@ -118,12 +168,17 @@ export const appointmentsApi = {
     if (params?.dateTo) searchParams.set('dateTo', params.dateTo)
     if (params?.limit) searchParams.set('limit', String(params.limit))
     if (params?.offset) searchParams.set('offset', String(params.offset))
-    const { data } = await apiClient.get<Appointment[]>(
+    const { data } = await apiClient.get<RawAppointment[]>(
       `me/appointments?${searchParams.toString()}`
     )
-    return Array.isArray(data) ? data.map(toAppointment) : data
+    return Array.isArray(data) ? data.map(toAppointment) : []
   },
 
+  /**
+   * `GET /businesses/:businessId/slots`
+   * `locationId` é obrigatório e precisa ser o id real de um local —
+   * não o id do negócio. `dateFrom`/`dateTo` são data-hora ISO.
+   */
   getAvailableSlots: async (
     businessId: string,
     params: {
@@ -140,50 +195,34 @@ export const appointmentsApi = {
     searchParams.set('dateTo', params.dateTo)
     searchParams.set('locationId', params.locationId)
     if (params.professionalId) searchParams.set('professionalId', params.professionalId)
-    const { data } = await apiClient.get<RawSlot[]>(
+    const { data } = await apiClient.get<RawSlot[] | PaginatedResponse<RawSlot>>(
       `businesses/${businessId}/slots?${searchParams.toString()}`
     )
-    return (Array.isArray(data) ? data : []).map(toAvailableSlot)
+    return unwrapList(data).items.map(toAvailableSlot)
   },
 
   getById: async (id: string) => {
-    const { data } = await apiClient.get<Appointment>(`appointments/${id}`)
-    return data
+    const { data } = await apiClient.get<RawAppointment>(`appointments/${id}`)
+    return toAppointment(data)
   },
 
-  confirm: async (id: string, employeeMembershipId: string) => {
-    const { data } = await apiClient.patch<Appointment>(
-      `appointments/${id}/confirm`,
-      { employeeMembershipId }
-    )
-    return data
+  /**
+   * As quatro mutações de status devolvem 204 (corpo vazio) — o front
+   * precisa refazer o GET para refletir o novo estado.
+   */
+  confirm: async (id: string, employeeMembershipId: string): Promise<void> => {
+    await apiClient.patch(`appointments/${id}/confirm`, { employeeMembershipId })
   },
 
-  complete: async (id: string, employeeMembershipId: string) => {
-    const { data } = await apiClient.patch<Appointment>(
-      `appointments/${id}/complete`,
-      { employeeMembershipId }
-    )
-    return data
+  complete: async (id: string, employeeMembershipId: string): Promise<void> => {
+    await apiClient.patch(`appointments/${id}/complete`, { employeeMembershipId })
   },
 
-  noShow: async (id: string, employeeMembershipId: string) => {
-    const { data } = await apiClient.patch<Appointment>(
-      `appointments/${id}/no-show`,
-      { employeeMembershipId }
-    )
-    return data
+  noShow: async (id: string, employeeMembershipId: string): Promise<void> => {
+    await apiClient.patch(`appointments/${id}/no-show`, { employeeMembershipId })
   },
 
-  cancel: async (
-    id: string,
-    reason: string,
-    employeeMembershipId?: string
-  ) => {
-    const { data } = await apiClient.patch<Appointment>(
-      `appointments/${id}/cancel`,
-      { reason, employeeMembershipId }
-    )
-    return data
+  cancel: async (id: string, reason: string, employeeMembershipId?: string): Promise<void> => {
+    await apiClient.patch(`appointments/${id}/cancel`, { reason, employeeMembershipId })
   },
 }

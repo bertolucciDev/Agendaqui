@@ -1,19 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Save, UserCog, Clock, Scissors, Check } from 'lucide-react'
 import { staffApi } from '@/services/api/staff'
-import { servicesApi } from '@/services/api/services'
+import { useSession } from '@/app/providers/session'
 import type {
   DayOfWeek,
   Membership,
   MembershipRole,
+  Service,
   WorkingHoursEntry,
 } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 
 const DAY_LABELS: Record<DayOfWeek, string> = {
   SUNDAY: 'Domingo',
@@ -52,16 +53,22 @@ interface DayEntry {
 interface StaffMemberModalProps {
   member: Membership
   businessId: string
+  /** Nome do negócio — usado para descobrir a chave (slug) das rotas por negócio. */
+  businessName?: string
   currentUserId?: string
   onClose: () => void
 }
 
 type Tab = 'edit' | 'hours' | 'services'
 
+const ROLE_OPTIONS = [
+  { value: 'MANAGER', label: 'Gerente' },
+  { value: 'EMPLOYEE', label: 'Funcionário' },
+  { value: 'OWNER', label: 'Proprietário' },
+]
+
 function toEntries(member: Membership): DayEntry[] {
-  const existing = member.workingHours?.length
-    ? member.workingHours
-    : undefined
+  const existing = member.workingHours?.length ? member.workingHours : undefined
   return DAY_ORDER.map((day) => {
     const w = existing?.find((e) => e.dayOfWeek === day)
     if (w) {
@@ -84,10 +91,12 @@ function toEntries(member: Membership): DayEntry[] {
 export function StaffMemberModal({
   member,
   businessId,
+  businessName,
   currentUserId,
   onClose,
 }: StaffMemberModalProps) {
   const queryClient = useQueryClient()
+  const { session } = useSession()
   const [tab, setTab] = useState<Tab>('edit')
   const [position, setPosition] = useState(member.position || '')
   const [role, setRole] = useState<MembershipRole>(member.role)
@@ -95,7 +104,18 @@ export function StaffMemberModal({
   const [days, setDays] = useState<DayEntry[]>(() => toEntries(member))
 
   const isSelf = member.userId === currentUserId
-  const isOwner = member.role === 'OWNER'
+  const isOwnerMember = member.role === 'OWNER'
+
+  /**
+   * Somente o DONO do negócio pode mexer no nível de acesso (privilegio
+   * validado no backend). A sessão (`GET /me/session`) traz os vínculos do
+   * usuário por negócio, então resolvemos o papel real sem depender da lista
+   * de funcionários (que pode estar filtrada por local).
+   */
+  const businessMemberships =
+    session?.businesses.find((b) => b.id === businessId)?.memberships ?? []
+  const isBusinessOwner = businessMemberships.some((m) => m.role === 'OWNER')
+  const canChangeRole = isBusinessOwner && !isSelf && !isOwnerMember
 
   const invalidateStaff = () => {
     void queryClient.invalidateQueries({ queryKey: ['staff'] })
@@ -103,14 +123,31 @@ export function StaffMemberModal({
   }
 
   const editMutation = useMutation({
-    mutationFn: () =>
-      staffApi.updateEmployee(member.id, { position, role, active }),
+    mutationFn: () => {
+      const payload: { position?: string; active?: boolean; role?: MembershipRole } = {
+        position,
+        active,
+      }
+      // O papel só vai no payload quando o usuário pode alterá-lo — enviar
+      // sempre dispara 403 do backend para quem não é dono.
+      if (canChangeRole && role !== member.role) {
+        payload.role = role
+      }
+      return staffApi.updateEmployee(member.id, payload)
+    },
     onSuccess: () => {
       invalidateStaff()
-      toast.success('Membro atualizado')
+      notify.success('Membro atualizado')
       onClose()
     },
-    onError: () => toast.error('Erro ao atualizar membro'),
+    onError: (err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 403) {
+        notify.error('Sem permissão para alterar este vínculo. Apenas o proprietário do negócio pode mudar o nível de acesso.')
+        return
+      }
+      notify.error(err)
+    },
   })
 
   const hoursMutation = useMutation({
@@ -122,17 +159,48 @@ export function StaffMemberModal({
     },
     onSuccess: () => {
       invalidateStaff()
-      toast.success('Horários atualizados')
+      notify.success('Horários atualizados')
       onClose()
     },
-    onError: () => toast.error('Erro ao salvar horários'),
+    onError: (err: unknown) => notify.error(err),
   })
 
-  const { data: services = [] } = useQuery({
-    queryKey: ['services', businessId],
-    queryFn: () => servicesApi.list(businessId),
-    enabled: tab === 'services',
+  const { data: catalog, isLoading: catalogLoading } = useQuery({
+    queryKey: ['business-catalog', businessId, businessName],
+    queryFn: () => staffApi.getBusinessCatalog(businessId, businessName),
+    enabled: tab === 'services' && !!businessId,
+    staleTime: 5 * 60_000,
   })
+
+  /**
+   * Verdade do vínculo profissional↔serviço: `GET /businesses/:slug/professionals`
+   * devolve, por profissional (o id é o id do vínculo), os serviços atribuídos.
+   */
+  const { data: professionals, isError: professionalsFailed } = useQuery({
+    queryKey: ['business-professionals', catalog?.key],
+    queryFn: () => staffApi.listProfessionals(catalog!.key),
+    enabled: tab === 'services' && !!catalog?.key,
+    retry: false,
+  })
+
+  const services: Service[] = catalog?.services ?? []
+
+  const assignedServiceIds = useMemo(() => {
+    const professional = professionals?.find((p) => p.id === member.id)
+    return new Set((professional?.services ?? []).map((s) => s.serviceId))
+  }, [professionals, member.id])
+
+  /**
+   * Sem a lista de profissionais (endpoint indisponível), cai para o campo
+   * legado `membershipIds`, que só existe no mock.
+   */
+  const isAssigned = (service: Service): boolean => {
+    if (professionals) return assignedServiceIds.has(service.id)
+    return service.membershipIds?.includes(member.id) ?? false
+  }
+
+  const memberListedAsProfessional =
+    !!professionals && professionals.some((p) => p.id === member.id)
 
   const toggleServiceMutation = useMutation({
     mutationFn: ({ serviceId, assigned }: { serviceId: string; assigned: boolean }) => {
@@ -140,10 +208,12 @@ export function StaffMemberModal({
         ? staffApi.unassignProfessional(serviceId, member.id)
         : staffApi.assignProfessional(serviceId, member.id)
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['services', businessId] })
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['business-professionals', catalog?.key] })
+      void queryClient.invalidateQueries({ queryKey: ['business-catalog', businessId, businessName] })
+      notify.success(variables.assigned ? 'Serviço desmarcado' : 'Serviço vinculado')
     },
-    onError: () => toast.error('Erro ao atualizar vínculo'),
+    onError: (err: unknown) => notify.error(err),
   })
 
   const setDay = (dayOfWeek: DayOfWeek, patch: Partial<DayEntry>) => {
@@ -171,10 +241,12 @@ export function StaffMemberModal({
           </button>
         </div>
 
-        <div className="flex rounded-lg border border-border mb-5">
+        <div className="flex rounded-lg border border-border mb-5" role="tablist">
           {tabs.map((t) => (
             <button
               key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
               className={cn(
                 'flex flex-1 items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors',
@@ -199,21 +271,37 @@ export function StaffMemberModal({
               />
             </div>
 
-            <div>
-              <label className="label">Papel</label>
-              <Select
-                className="mt-1.5"
-                value={role}
-                disabled={isOwner}
-                options={[
-                  { value: 'MANAGER', label: 'Gerente' },
-                  { value: 'EMPLOYEE', label: 'Funcionário' },
-                  { value: 'OWNER', label: 'Proprietário' },
-                ]}
-                onChange={(e) => setRole(e.target.value as MembershipRole)}
-              />
-              {isOwner && <p className="mt-1 text-xs text-muted-foreground">O papel de proprietário não pode ser alterado.</p>}
-            </div>
+            {isBusinessOwner ? (
+              <div>
+                <label className="label">Papel</label>
+                <Select
+                  className="mt-1.5"
+                  value={role}
+                  disabled={isOwnerMember || isSelf}
+                  options={ROLE_OPTIONS}
+                  onChange={(e) => setRole(e.target.value as MembershipRole)}
+                />
+                {isOwnerMember && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    O papel de proprietário não pode ser alterado.
+                  </p>
+                )}
+                {!isOwnerMember && isSelf && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Você não pode alterar o próprio nível de acesso.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-muted p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Nível de acesso: {role === 'OWNER' ? 'Proprietário' : role === 'MANAGER' ? 'Gerente' : 'Funcionário'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Somente o proprietário do negócio pode alterar o nível de acesso da equipe.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
@@ -231,6 +319,7 @@ export function StaffMemberModal({
                   isSelf && 'opacity-40 cursor-not-allowed'
                 )}
                 aria-label="Alternar ativo"
+                aria-pressed={active}
               >
                 <span
                   className={cn(
@@ -267,6 +356,7 @@ export function StaffMemberModal({
                       d.open ? 'bg-success' : 'bg-border'
                     )}
                     aria-label="Atende neste dia"
+                    aria-pressed={d.open}
                   >
                     <span
                       className={cn(
@@ -322,13 +412,14 @@ export function StaffMemberModal({
             </p>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {services.map((svc) => {
-                const assigned = svc.membershipIds?.includes(member.id) ?? false
+                const assigned = isAssigned(svc)
                 const pending = toggleServiceMutation.isPending
                 return (
                   <button
                     key={svc.id}
                     onClick={() => toggleServiceMutation.mutate({ serviceId: svc.id, assigned })}
                     disabled={pending}
+                    aria-pressed={assigned}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-colors',
                       assigned ? 'border-primary-200 bg-primary-soft' : 'border-border hover:border-primary-200',
@@ -350,10 +441,21 @@ export function StaffMemberModal({
                   </button>
                 )
               })}
-              {services.length === 0 && (
+              {services.length === 0 && !catalogLoading && (
                 <p className="py-6 text-center text-sm text-muted-foreground">Nenhum serviço cadastrado.</p>
               )}
             </div>
+            {professionalsFailed && (
+              <p className="text-xs text-muted-foreground">
+                Não foi possível carregar os vínculos de serviço deste profissional agora.
+              </p>
+            )}
+            {professionals && !memberListedAsProfessional && (
+              <p className="text-xs text-muted-foreground">
+                Este membro não aparece na lista de profissionais (vínculo inativo ou removido), então os
+                serviços podem não estar refletidos na listagem.
+              </p>
+            )}
           </div>
         )}
       </div>

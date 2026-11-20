@@ -1,72 +1,18 @@
-import { useNavigate } from 'react-router-dom'
-import { OnboardingWizard } from '@/components/wizard/onboarding-wizard'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { businessesApi } from '@/services/api/businesses'
-import { locationsApi } from '@/services/api/locations'
-import { servicesApi } from '@/services/api/services'
-import toast from 'react-hot-toast'
+import { Navigate } from 'react-router-dom'
 
+/**
+ * DEAD CODE — a rota `/onboarding` redireciona para `/onboarding/business`
+ * (ver `src/App.tsx`), então esta página nunca é renderizada.
+ *
+ * O fluxo antigo criava o negócio com `POST /businesses`, que hoje responde
+ * **410 GONE**: a criação de negócios é exclusiva do fluxo de Business
+ * Verification (`src/pages/onboarding.business.tsx` → presign/complete de
+ * documentos → submit → aprovação administrativa), que cria o Business + um
+ * Local + a membership OWNER de forma atômica.
+ *
+ * A antiga tela e o `OnboardingWizard` foram mantidos apenas como registro;
+ * ambos são candidatos a remoção (nenhum importador resta no código).
+ */
 export default function OnboardingPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-
-  const createBusiness = useMutation({
-    mutationFn: businessesApi.create,
-  })
-
-  const createLocation = useMutation({
-    mutationFn: ({ businessId, data }: { businessId: string; data: any }) =>
-      locationsApi.create(businessId, data),
-  })
-
-  const createService = useMutation({
-    mutationFn: ({ businessId, data }: { businessId: string; data: any }) =>
-      servicesApi.create(businessId, data),
-  })
-
-  const handleComplete = async (data: Record<string, any>) => {
-    try {
-      const business = await createBusiness.mutateAsync({
-        name: data.businessName || 'Meu Negócio',
-        document: '00000000000',
-        type: data.businessType || 'COMPANY',
-        categoryId: '',
-        locationName: 'Principal',
-        address: data.address || '',
-        timezone: 'America/Sao_Paulo',
-      })
-
-      if (data.address) {
-        await createLocation.mutateAsync({
-          businessId: business.id,
-          data: {
-            name: 'Principal',
-            address: data.address,
-            timezone: 'America/Sao_Paulo',
-            attendanceType: 'AT_LOCATION',
-          },
-        })
-      }
-
-      if (data.serviceName) {
-        await createService.mutateAsync({
-          businessId: business.id,
-          data: {
-            name: data.serviceName,
-            categoryId: '',
-            priceCents: Math.round((parseFloat(data.price) || 0) * 100),
-            durationMinutes: parseInt(data.duration) || 30,
-          },
-        })
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      toast.success('Configuração inicial concluída!')
-      navigate('/dashboard')
-    } catch {
-      toast.error('Erro ao salvar configurações')
-    }
-  }
-
-  return <OnboardingWizard onComplete={handleComplete} />
+  return <Navigate to="/onboarding/business" replace />
 }

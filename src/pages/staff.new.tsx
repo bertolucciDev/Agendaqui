@@ -1,13 +1,11 @@
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { staffApi } from '@/services/api/staff'
-import { locationsApi } from '@/services/api/locations'
 import { useActiveBusiness } from '@/app/hooks/use-active-business'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { staffSchema, type StaffFormData } from '@/lib/validations'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 import { ArrowLeft, Users } from 'lucide-react'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
@@ -18,15 +16,21 @@ import { cn } from '@/lib/utils'
 export default function NewStaffPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { businessId, activeMode } = useActiveBusiness()
+  const { businessId, business } = useActiveBusiness()
 
-  const { data: locations = [] } = useQuery({
-    queryKey: ['locations', activeMode, businessId],
-    queryFn: () => locationsApi.list(businessId!),
+  /**
+   * Locais do negócio. As rotas de leitura (`businesses/:slug/locations`) são
+   * indexadas por slug, então o catálogo é resolvido pelo id do negócio.
+   */
+  const { data: catalog } = useQuery({
+    queryKey: ['business-catalog', businessId, business?.name],
+    queryFn: () => staffApi.getBusinessCatalog(businessId!, business?.name),
     enabled: !!businessId,
+    staleTime: 5 * 60_000,
   })
+
+  const locations = catalog?.locations ?? []
 
   const { register, handleSubmit, formState: { errors } } = useForm<StaffFormData>({
     resolver: zodResolver(staffSchema),
@@ -36,20 +40,23 @@ export default function NewStaffPage() {
   const inviteMutation = useMutation({
     mutationFn: (data: StaffFormData) =>
       staffApi.inviteEmployee(businessId!, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['staff'] })
-      toast.success('Convite enviado!')
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ['staff'] })
+      notify.success(
+        result?.inviteId
+          ? 'Convite enviado! O funcionário recebeu o código por e-mail.'
+          : 'Convite enviado!'
+      )
       navigate('/staff')
     },
-    onError: () => toast.error('Erro ao enviar convite'),
+    onError: (err: unknown) => notify.error(err),
   })
 
   const onSubmit = (data: StaffFormData) => {
     if (!businessId) {
-      toast.error('Cadastre um negócio primeiro')
+      notify.warning('Cadastre um negócio primeiro')
       return
     }
-    setIsSubmitting(true)
     inviteMutation.mutate(data)
   }
 
@@ -115,15 +122,24 @@ export default function NewStaffPage() {
                       </label>
                     ))}
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    O convite é enviado por e-mail com um código de aceite.
+                  </p>
                 </div>
 
                 <Button
                   type="submit"
-                  loading={isSubmitting}
+                  loading={inviteMutation.isPending}
+                  disabled={!businessId || locations.length === 0}
                   className="w-full"
                 >
                   Enviar convite
                 </Button>
+                {locations.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Cadastre um local no negócio antes de convidar alguém.
+                  </p>
+                )}
               </form>
             </CardContent>
           </Card>

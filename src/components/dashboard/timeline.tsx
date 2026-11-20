@@ -1,5 +1,4 @@
-import { Clock, Scissors } from 'lucide-react'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Clock, Scissors } from 'lucide-react'
 import type { Appointment, MembershipRole } from '@/types'
 import { AppointmentActions } from '@/components/appointments/appointment-actions'
 
@@ -24,7 +23,7 @@ export function Timeline({ appointments = [], role, membershipId }: TimelineProp
   if (appointments.length === 0) {
     return (
       <div className="card p-6">
-        <h2 className="text-sm font-semibold text-ink mb-4">Próximos agendamentos</h2>
+        <h2 className="text-sm font-semibold text-ink mb-4">Agendamentos de hoje</h2>
         <div className="flex flex-col items-center py-8 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <CalendarDays className="h-5 w-5 text-muted-foreground" />
@@ -38,7 +37,7 @@ export function Timeline({ appointments = [], role, membershipId }: TimelineProp
 
   return (
     <div className="card p-6">
-      <h2 className="text-sm font-semibold text-ink mb-4">Próximos agendamentos</h2>
+      <h2 className="text-sm font-semibold text-ink mb-4">Agendamentos de hoje</h2>
       <div className="space-y-3">
         {appointments.map((apt) => {
           const status = statusConfig[apt.status]
@@ -51,7 +50,7 @@ export function Timeline({ appointments = [], role, membershipId }: TimelineProp
           return (
             <div
               key={apt.id}
-              className="flex items-start gap-3 rounded-xl border border-border p-3 transition-all duration-200 hover:border-brand-300 hover:shadow-sm"
+              className="flex items-start gap-3 rounded-xl border border-border p-3 transition-all duration-200 hover:border-border-strong hover:shadow-sm"
             >
               <div className="flex h-12 w-12 flex-col items-center justify-center rounded-xl bg-primary-soft text-center">
                 <Clock className="h-3 w-3 text-primary-accent" />
@@ -60,7 +59,7 @@ export function Timeline({ appointments = [], role, membershipId }: TimelineProp
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-ink truncate">
-                  {apt.client?.name || 'Cliente'}
+                  {apt.customer?.name || 'Cliente'}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <Scissors className="h-3 w-3 text-muted-foreground" />

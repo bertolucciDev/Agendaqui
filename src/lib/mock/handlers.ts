@@ -16,6 +16,7 @@ import {
   type SessionBusinessPayload,
   type SessionMembershipPayload,
 } from './db'
+import { isValidCnpj, isValidCpf } from '@/lib/validations'
 
 export class ApiError extends Error {
   status: number
@@ -77,7 +78,7 @@ const ROLE_PERMISSIONS: Record<MockMembership['role'], string[]> = {
  * projeta membership virtual `virtual-owner:<id>` (nunca persistida) com todos os locais ativos. */
 function buildMeSession(db: MockDb, userId: string): MeSessionPayload {
   const memberships = db.memberships.filter((m) => m.userId === userId && m.active)
-  const owned = db.businesses.filter((b) => b.ownerUserId === userId && b.status !== 'INACTIVE')
+  const owned = db.businesses.filter((b) => b.ownerUserId === userId && b.status !== 'INACTIVE' && b.status !== 'BLOCKED')
   const memberBusinesses = db.businesses.filter((b) => memberships.some((m) => m.businessId === b.id))
 
   const activeLocationIds = (businessId: string) =>
@@ -133,12 +134,20 @@ function buildMeSession(db: MockDb, userId: string): MeSessionPayload {
 
   const prefs = db.preferences[userId] || { activeMode: null, activeBusinessId: null }
 
+  /* Super_admin (platform admin): usuário com e-mail reservado — sem businesses
+   * e sem modos de negócio, igual o backend real. O FirstBusinessGuard já
+   * permite acesso direto quando isPlatformAdmin é true. */
+  const userRecord = db.users.find((u) => u.id === userId)
+  const isPlatformAdmin = userRecord?.email === 'admin@agendaqui.app' || userRecord?.email === 'admin.agendaqui@agendaqui.com'
+
   return {
     user: { id: userId },
-    availableModes,
-    businesses,
-    customerProfile: customerProfile ? { id: customerProfile.id } : null,
-    isPlatformAdmin: false,
+    availableModes: isPlatformAdmin ? [] : availableModes,
+    businesses: isPlatformAdmin ? [] : businesses,
+    /* O contrato congelado de /me/session usa `customerProfile: { id }`, e o
+     * `id` do perfil é o `userId` (o modelo não tem coluna `id`). */
+    customerProfile: isPlatformAdmin || !customerProfile ? null : { id: customerProfile.userId },
+    isPlatformAdmin,
     preferences: prefs,
   }
 }
@@ -156,8 +165,8 @@ function withBusinessRelations(businessId: string) {
 function serializeAppointment(raw: MockAppointment) {
   const db = getDb()
   const service = raw.service || db.services.find((s) => s.id === raw.serviceId) || null
-  const employee =
-    raw.employee ||
+  const employeeMembership =
+    raw.employeeMembership ||
     db.memberships.find((m) => m.id === raw.employeeMembershipId) ||
     null
   return {
@@ -166,13 +175,13 @@ function serializeAppointment(raw: MockAppointment) {
     businessId: raw.businessId,
     locationId: raw.locationId,
     serviceId: raw.serviceId,
-    clientId: raw.clientId,
+    customerUserId: raw.customerUserId,
     employeeMembershipId: raw.employeeMembershipId,
     status: raw.status,
     startsAt: raw.startsAt,
     endsAt: raw.endsAt,
     priceCents: raw.priceCents,
-    cancelReason: raw.cancelReason,
+    cancellationReason: raw.cancellationReason,
     service: service
       ? {
           id: service.id,
@@ -181,8 +190,8 @@ function serializeAppointment(raw: MockAppointment) {
           durationMinutes: service.durationMinutes,
         }
       : undefined,
-    employee,
-    client: raw.client,
+    employeeMembership,
+    customer: raw.customer,
     createdAt: raw.createdAt,
   }
 }
@@ -297,7 +306,7 @@ export function handleRequest(
       db.users.push(user)
       db.sessionUserId = id
       // paridade com o backend: register cria customerProfile (CUSTOMER mode)
-      db.customerProfiles.push({ id: `cp_${id}`, userId: id, reputation: 0, strikes: 0 })
+      db.customerProfiles.push({ userId: id, reputation: 0, strikeCount: 0 })
       saveDb()
       return ok(user)
     }
@@ -337,6 +346,26 @@ export function handleRequest(
     return ok()
   }
 
+  if (segs[0] === 'categories' && method === 'get') {
+    return ok(db.categories)
+  }
+  if (segs[0] === 'categories' && method === 'post') {
+    const category = {
+      id: nextId('cat'),
+      name: body?.name || 'Nova categoria',
+      slug: body?.slug || slugify(body?.name || 'nova-categoria'),
+      parentId: body?.parentId ?? null,
+    }
+    db.categories.push(category)
+    saveDb()
+    return ok(category)
+  }
+  if (segs[0] === 'categories' && method === 'delete') {
+    db.categories = db.categories.filter((c) => c.id !== segs[1])
+    saveDb()
+    return ok()
+  }
+
   /* ---------------- businesses ---------------- */
   if (segs[0] === 'businesses') {
     return handleBusinesses(method, segs, query, body)
@@ -344,7 +373,7 @@ export function handleRequest(
 
   /* ---------------- locations ---------------- */
   if (segs[0] === 'locations') {
-    return handleLocations(method, segs, body)
+    return handleLocations(method, segs, body, query)
   }
 
   /* ---------------- employees ---------------- */
@@ -386,16 +415,155 @@ export function handleRequest(
       )
     }
     if (segs[1] === 'customer-profile') {
-      return ok({ id: 'prof_cust', userId: currentUser()?.id || '', reputation: 0, strikes: 0 })
+      /* Contrato congelado: o `CustomerProfile` tem PK `userId` (não existe
+       * coluna `id`), então o perfil é identificado pelo `userId`. */
+      const userId = currentUser()?.id || ''
+      const profile = getDb().customerProfiles.find((p) => p.userId === userId)
+      return ok({
+        userId,
+        reputation: profile?.reputation ?? 0,
+        strikeCount: profile?.strikeCount ?? 0,
+      })
     }
     if (segs[1] === 'admin-profile') {
-      return ok({ id: 'prof_admin', userId: currentUser()?.id || '', role: 'OWNER' })
+      return ok({ userId: currentUser()?.id || '', level: 'ADMIN' })
     }
   }
 
   /* ---------------- platform-config ---------------- */
   if (segs[0] === 'platform-config' && method === 'get') {
     return ok({ commissionRateBps: 200 })
+  }
+
+  if (segs[0] === 'platform-config' && method === 'put') {
+    return ok({ commissionRateBps: body?.commissionRateBps ?? 200 })
+  }
+
+  /* ---------------- admin business-verifications ---------------- */
+  if (segs[0] === 'me' && segs[1] === 'admin' && segs[2] === 'business-verifications') {
+    const allV = getDb().businessVerifications
+    const statusFilter = query.get('status')
+    let list = [...allV].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    if (statusFilter) {
+      list = list.filter((v) => v.status === statusFilter)
+    }
+
+    const limitRaw = query.get('limit')
+    const offsetRaw = query.get('offset')
+    const limit = limitRaw ? Math.max(1, Number(limitRaw)) : 20
+    const offset = offsetRaw ? Math.max(0, Number(offsetRaw)) : 0
+    const page = list.slice(offset, offset + limit)
+
+    const summaries = page.map((v) => ({
+      verificationId: v.id,
+      ownerUserId: v.ownerUserId,
+      ownerName: v.ownerUserId,
+      status: v.status,
+      businessType: v.businessType,
+      document: v.document,
+      tradeName: v.tradeName,
+      legalName: v.legalName,
+      categoryId: v.categoryId,
+      attemptCount: v.attemptCount,
+      submittedAt: v.submittedAt,
+      expiresAt: v.expiresAt,
+      documents: (v.documents || []).map((d: any) => ({
+        id: d.id,
+        documentType: d.documentType,
+        version: d.version,
+        status: d.status,
+        sizeBytes: d.sizeBytes || 0,
+        mimeType: d.mimeType,
+        createdAt: d.createdAt,
+        contentUrl: `mock-doc://${d.id}`,
+      })),
+      approvedBusinessId: v.approvedBusinessId,
+      rejectionReason: v.rejectionReason,
+      rejectionComment: v.rejectionComment,
+    }))
+
+    if (segs.length === 3) {
+      const body = { data: summaries, total: list.length, limit, offset, items: summaries }
+      return { status: 200, body }
+    }
+
+    const detailId = segs[3]
+    if (segs.length === 4 && method === 'get') {
+      const v = allV.find((x) => x.id === detailId)
+      if (!v) throw new ApiError(404, 'Not found')
+      const sv = summaries.find((s) => s.verificationId === detailId)
+      return { status: 200, body: sv ?? summaries[0] }
+    }
+
+    if (segs.length === 5) {
+      const vId = segs[3]
+      const action = segs[4]
+      if (action === 'approve' && method === 'post') {
+        const v = allV.find((x) => x.id === vId)
+        if (!v) throw new ApiError(404, 'Not found')
+        if (v.status !== 'PENDING') throw new ApiError(409, 'Not pending')
+        v.status = 'APPROVED'
+        v.decidedAt = new Date().toISOString()
+        v.approvedBusinessId = 'biz-mock-' + v.id.slice(0, 8)
+        const db = getDb()
+        if (!db.businesses.some((business) => business.id === v.approvedBusinessId)) {
+          db.businesses.push({
+            id: v.approvedBusinessId,
+            ownerUserId: v.ownerUserId,
+            name: v.tradeName,
+            slug: `${slugify(v.tradeName)}-${v.id.slice(0, 8)}`,
+            document: v.document,
+            type: v.businessType,
+            categoryId: v.categoryId,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString(),
+          })
+        }
+        saveDb()
+        return ok({ verificationId: v.id, businessId: v.approvedBusinessId, locationId: 'loc-mock-1' })
+      }
+      if (action === 'reject' && method === 'post') {
+        const v = allV.find((x) => x.id === vId)
+        if (!v) throw new ApiError(404, 'Not found')
+        if (v.status !== 'PENDING') throw new ApiError(409, 'Not pending')
+        v.status = 'REJECTED'
+        v.rejectionReason = body?.reason || 'OUTRO'
+        v.rejectionComment = body?.comment || ''
+        v.decidedAt = new Date().toISOString()
+        saveDb()
+        return ok({ verificationId: v.id, status: 'REJECTED' })
+      }
+      if (action === 'request-resend' && method === 'post') {
+        const v = allV.find((x) => x.id === vId)
+        if (!v) throw new ApiError(404, 'Not found')
+        if (v.attemptCount >= 3) throw new ApiError(409, 'Max attempts')
+        v.status = 'DRAFT'
+        v.submittedAt = null
+        saveDb()
+        return ok({ verificationId: v.id, status: 'DRAFT' })
+      }
+      if (action === 'block' && method === 'post') {
+        const v = allV.find((x) => x.id === vId)
+        if (!v) throw new ApiError(404, 'Not found')
+        if (v.status !== 'APPROVED') throw new ApiError(409, 'Not approved')
+        const business = getDb().businesses.find((item) => item.id === v.approvedBusinessId)
+        if (!business) throw new ApiError(404, 'Approved business not found')
+        if (business.status === 'BLOCKED') throw new ApiError(409, 'Business already blocked')
+        business.status = 'BLOCKED'
+        saveDb()
+        return ok({ businessId: v.approvedBusinessId || 'biz-mock', status: 'BLOCKED' })
+      }
+      if (action === 'unblock' && method === 'post') {
+        const v = allV.find((x) => x.id === vId)
+        if (!v) throw new ApiError(404, 'Not found')
+        if (v.status !== 'APPROVED') throw new ApiError(409, 'Not approved')
+        const business = getDb().businesses.find((item) => item.id === v.approvedBusinessId)
+        if (!business || business.status !== 'BLOCKED') throw new ApiError(409, 'Business not blocked')
+        business.status = 'ACTIVE'
+        saveDb()
+        return ok({ businessId: v.approvedBusinessId || 'biz-mock', status: 'ACTIVE' })
+      }
+    }
   }
 
   throw new ApiError(404, 'Rota não encontrada no mock')
@@ -407,7 +575,7 @@ export function handleRequest(
  * SEM este handler o mock devolvia 404 e o `WorkspaceGate` usava `availableModes=[]`
  * (sem customerProfile no register) para mostrar o seletor de modo no lugar do
  * onboarding. Validações de domínio espelham as regras críticas do backend:
- * CNPJ 14 dígitos / CPF 11 dígitos; COMPANY exige CPF do responsável;
+ * CNPJ 14 dígitos / CPF 11 dígitos;
  * requeridos: COMPANY → COMPROVANTE_CNPJ; INDIVIDUAL → CPF_FRENTE/CPF_VERSO.
  * O upload real (PUT) é interceptado em RAM por `mockUploadStore` (ver index.ts);
  * o complete confere a presença do objeto e NÃO recalcula sha256 (simplificação
@@ -436,6 +604,10 @@ const MOCK_ALLOWED_DOCS: Record<string, string[]> = {
 
 function mockDigits(value: unknown): string {
   return String(value ?? '').replace(/\D/g, '')
+}
+
+function mockCnpj(value: unknown): string {
+  return String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
 function latestVerification(userId: string) {
@@ -512,17 +684,17 @@ function serializeVerification(v: MockBusinessVerification | null) {
   }
 }
 
-function assertVerificationDocRules(payload: { businessType?: unknown; document?: unknown; responsibleCpf?: unknown }) {
+function assertVerificationDocRules(payload: { businessType?: unknown; document?: unknown }) {
   const businessType = String(payload.businessType ?? '')
-  const digits = mockDigits(payload.document)
   if (businessType === 'COMPANY') {
-    if (digits.length !== 14) throw new ApiError(400, 'CNPJ deve ter 14 dígitos.')
-    if (mockDigits(payload.responsibleCpf).length !== 11) {
-      throw new ApiError(400, 'CPF do responsável é obrigatório para pessoa jurídica.')
+    if (!isValidCnpj(mockCnpj(payload.document))) {
+      throw new ApiError(400, 'CNPJ deve ter 14 caracteres alfanuméricos (os dois últimos são dígitos).')
     }
     return
   }
-  if (digits.length !== 11) throw new ApiError(400, 'CPF deve ter 11 dígitos.')
+  if (businessType !== 'INDIVIDUAL' || !isValidCpf(mockDigits(payload.document)) || /[A-Za-z]/.test(String(payload.document ?? ''))) {
+    throw new ApiError(400, 'CPF deve ter 11 dígitos.')
+  }
 }
 
 function handleBusinessVerification(method: Method, segs: string[], body: any): MockResponse {
@@ -554,11 +726,11 @@ function handleBusinessVerification(method: Method, segs: string[], body: any): 
       ownerUserId: user.id,
       status: 'DRAFT',
       businessType,
-      document: mockDigits(doc),
+      document: businessType === 'COMPANY' ? mockCnpj(doc) : mockDigits(doc),
       tradeName: String(tradeName),
       legalName: body.legalName ?? null,
       responsibleName: body.responsibleName ?? null,
-      responsibleCpf: businessType === 'INDIVIDUAL' ? mockDigits(doc) : mockDigits(body.responsibleCpf),
+      responsibleCpf: businessType === 'INDIVIDUAL' ? mockDigits(doc) : null,
       categoryId: String(categoryId),
       phone: body.phone ?? null,
       timezone: body.timezone ?? null,
@@ -588,16 +760,14 @@ function handleBusinessVerification(method: Method, segs: string[], body: any): 
     assertVerificationDocRules({
       businessType: merged.businessType,
       document: merged.document,
-      responsibleCpf: merged.responsibleCpf,
     })
     Object.assign(current, {
       businessType: merged.businessType,
-      document: mockDigits(merged.document),
+      document: merged.businessType === 'COMPANY' ? mockCnpj(merged.document) : mockDigits(merged.document),
       tradeName: merged.tradeName,
       legalName: merged.legalName ?? null,
       responsibleName: merged.responsibleName ?? null,
-      responsibleCpf:
-        merged.businessType === 'INDIVIDUAL' ? mockDigits(merged.document) : mockDigits(merged.responsibleCpf),
+      responsibleCpf: merged.businessType === 'INDIVIDUAL' ? mockDigits(merged.document) : null,
       categoryId: merged.categoryId,
       phone: merged.phone ?? null,
       timezone: merged.timezone ?? null,
@@ -718,7 +888,7 @@ function handleAuth(method: Method, segs: string[], body: any): MockResponse {
       }
       db.users.push(user)
       // paridade com o backend (prisma-user.repository): register cria customerProfile
-      db.customerProfiles.push({ id: `cp_${id}`, userId: id, reputation: 0, strikes: 0 })
+      db.customerProfiles.push({ userId: id, reputation: 0, strikeCount: 0 })
     }
     user.emailVerifiedAt = user.emailVerifiedAt || new Date().toISOString()
     user.status = 'ACTIVE'
@@ -727,7 +897,8 @@ function handleAuth(method: Method, segs: string[], body: any): MockResponse {
     return ok({
       accessToken: `mock-user-${user.id}`,
       refreshToken: `mock-refresh-${user.id}`,
-      user: { ...user },
+      /* O backend real devolve SOMENTE os tokens — o perfil vem de
+       * `GET /auth/me`. O front já foi ajustado para esse contrato. */
     })
   }
 
@@ -779,7 +950,9 @@ function handleAuth(method: Method, segs: string[], body: any): MockResponse {
     return ok()
   }
   if (segs[1] === 'create-temp-session' && method === 'post') {
-    return ok()
+    /* O backend devolve o tempToken — o front precisa capturá-lo para
+     * concluir o fluxo `create-temp-session → first-access/set-password`. */
+    return ok({ tempToken: `mock-temp-${nextId('tmp')}` })
   }
 
   throw new ApiError(404, 'Rota de autenticação não encontrada no mock')
@@ -794,61 +967,16 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
   }
 
   if (segs.length === 1 && method === 'post') {
-      const { name, document, type, categoryId, locationName, address, timezone, attendanceType, phone, description } = body || {}
-        if (!name) throw new ApiError(422, 'name é obrigatório')
-        const owner = currentUser()
-        if (!owner) throw new ApiError(401, 'Unauthorized')
-        // paridade backend: Business.document é único → 409 em duplicidade (CPF/CNPJ)
-        const docDigits = String(document || '').replace(/\D/g, '')
-        if (docDigits && db.businesses.some((b) => String(b.document).replace(/\D/g, '') === docDigits)) {
-          throw new ApiError(409, 'documento já cadastrado')
-        }
-        const businessId = nextId('biz')
-        const locationId = nextId('loc')
-        const now = new Date().toISOString()
-        const business = {
-          id: businessId,
-          name: String(name),
-          slug: slugify(String(name)),
-          document: document || '',
-          type: (type === 'INDIVIDUAL' ? 'INDIVIDUAL' : 'COMPANY') as 'COMPANY' | 'INDIVIDUAL',
-          categoryId: categoryId || '',
-          /* Backend real: criação marca Business.ownerUserId; NÃO persiste membership OWNER.
-           * A sessão projeta `virtual-owner:<businessId>` a partir da propriedade. */
-          ownerUserId: owner.id,
-          description: description || undefined,
-          phone: phone || undefined,
-          timezone: timezone || 'America/Sao_Paulo',
-          attendanceType: attendanceType || 'AT_LOCATION',
-          status: 'ACTIVE' as const,
-          createdAt: now,
-        }
-        db.businesses.push(business)
-        db.locations.push({
-          id: locationId,
-          businessId,
-          name: locationName || 'Principal',
-          address: address || '',
-          timezone: timezone || 'America/Sao_Paulo',
-          attendanceType: attendanceType || 'AT_LOCATION',
-          phone: phone || null,
-          status: 'ACTIVE',
-          isHeadquarter: true,
-        })
-        saveDb()
-        return {
-          status: 201,
-          body: {
-            id: businessId,
-            businessId,
-            locationId,
-            membershipId: `virtual-owner:${businessId}`,
-            slug: business.slug,
-            name: business.name,
-            createdAt: business.createdAt,
-          },
-        }
-    }
+    /* Paridade com o backend real: `POST /businesses` responde **410 GONE**.
+     * A criação de negócios acontece exclusivamente pelo fluxo de Business
+     * Verification (`POST /me/business-verification` → documentos → submit →
+     * aprovação administrativa), que cria Business + Local + membership OWNER
+     * de forma atômica. */
+    throw new ApiError(
+      410,
+      'Endpoint depreciado. A criação de negócios agora ocorre via aprovação de Business Verification (POST /me/business-verification → submit → aprovação admin).'
+    )
+  }
 
   if (segs.length === 2) {
     const idOrSlug = segs[1]
@@ -919,21 +1047,55 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
     }
 
     if (resource === 'services' && method === 'get') {
-      if (query.get('page') !== null) {
-        return paginated(
-          db.services.filter((s) => s.businessId === businessId),
-          query.get('limit') ?? undefined,
-          query.get('offset') ?? undefined
-        )
+      const list = db.services.filter((s) => s.businessId === businessId)
+      /* O backend pagina estas listas: paginamos quando o caller envia
+       * qualquer parâmetro de paginação. */
+      if (
+        query.get('page') !== null ||
+        query.get('limit') !== null ||
+        query.get('offset') !== null
+      ) {
+        return paginated(list, query.get('limit') ?? undefined, query.get('offset') ?? undefined)
       }
-      return ok(db.services.filter((s) => s.businessId === businessId))
+      return ok(list)
     }
     if (resource === 'services' && method === 'post') {
       const service = handleCreateService(businessId, body)
       return { status: 201, body: service }
     }
 
+    if (resource === 'professionals' && method === 'get') {
+      /* Profissionais do negócio com os serviços vinculados de cada um.
+       * É a fonte de verdade do vínculo profissional↔serviço. */
+      const businessLocations = db.locations
+        .filter((l) => l.businessId === businessId)
+        .map((l) => l.id)
+      const members = db.memberships.filter(
+        (m) => m.businessId === businessId || businessLocations.includes(m.locationId)
+      )
+      const professionals = members.map((m) => ({
+        id: m.id,
+        userId: m.userId,
+        name: m.user?.name ?? '',
+        position: m.position,
+        role: m.role,
+        active: m.active,
+        services: db.services
+          .filter((s) => s.businessId === businessId && s.membershipIds?.includes(m.id))
+          .map((s) => ({ serviceId: s.id })),
+      }))
+      return paginated(
+        professionals,
+        query.get('limit') ?? undefined,
+        query.get('offset') ?? undefined
+      )
+    }
+
     if (resource === 'employees' && method === 'get') {
+      const businessExists = db.businesses.some(
+        (b) => b.id === businessId || b.slug === businessId,
+      )
+      if (!businessExists) throw new ApiError(404, 'Negócio não encontrado')
       const businessLocations = db.locations.filter((l) => l.businessId === businessId).map((l) => l.id)
       const members = db.memberships.filter(
         (m) => m.businessId === businessId || businessLocations.includes(m.locationId)
@@ -969,7 +1131,9 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
       db.users.push(user)
       db.memberships.push(membership)
       saveDb()
-      return { status: 201, body: fromMembership(membership) }
+      /* O backend real devolve `{ inviteId }`: a solicitação de vínculo fica
+       * pendente até o aceite do convite pelo convidado. */
+      return { status: 201, body: { inviteId: nextId('inv') } }
     }
 
     if (resource === 'appointments' && method === 'get') {
@@ -1018,8 +1182,26 @@ function fromMembership(m: MockMembership) {
 }
 
 /* ------------------------------------------------ */
-function handleLocations(method: Method, segs: string[], body: any): MockResponse {
+function handleLocations(
+  method: Method,
+  segs: string[],
+  body: any,
+  query: URLSearchParams
+): MockResponse {
   const db = getDb()
+  /* Rota do dono: GET /locations/business/:businessId/locations
+   * (o backend indexa a listagem de locais do negócio por businessId aqui;
+   * a rota `businesses/:slug/locations` é a visão pública por slug). */
+  if (
+    method === 'get' &&
+    segs.length === 4 &&
+    segs[1] === 'business' &&
+    segs[3] === 'locations'
+  ) {
+    const businessId = segs[2]
+    const list = db.locations.filter((l) => l.businessId === businessId)
+    return paginated(list, query.get('limit') ?? undefined, query.get('offset') ?? undefined)
+  }
   if (method === 'delete' && segs.length === 2) {
     db.locations = db.locations.filter((l) => l.id !== segs[1])
     db.memberships = db.memberships.filter((m) => m.locationId !== segs[1])
@@ -1089,7 +1271,17 @@ function handleEmployees(method: Method, segs: string[], body: any): MockRespons
     return ok(fromMembership(member))
   }
   if (method === 'post' && segs[2] === 'time-offs') {
-    return { status: 201, body: { id: nextId('to'), employeeMembershipId: segs[1], ...body, status: 'PENDING' } }
+    /* O enum real do backend é REQUESTED | APPROVED | REJECTED. */
+    return {
+      status: 201,
+      body: {
+        id: nextId('to'),
+        timeOffId: nextId('to'),
+        employeeMembershipId: segs[1],
+        ...body,
+        status: 'REQUESTED',
+      },
+    }
   }
   throw new ApiError(404, 'Rota de funcionários não encontrada no mock')
 }
@@ -1164,7 +1356,7 @@ function handleAppointments(method: Method, segs: string[], body: any): MockResp
     const status = map[action]
     if (status) {
       appointment.status = status
-      if (status === 'CANCELLED') appointment.cancelReason = body?.reason || 'Cancelado'
+      if (status === 'CANCELLED') appointment.cancellationReason = body?.reason || 'Cancelado'
       saveDb()
     }
     return ok(serializeAppointment(appointment))
@@ -1195,25 +1387,32 @@ function handleCreateService(businessId: string, body: any): MockService {
 
 function handleCreateAppointment(businessId: string, body: any) {
   const db = getDb()
-  const { serviceId, locationId, startsAt, endsAt, employeeMembershipId, clientName, clientPhone } = body || {}
+  /* O DTO do backend NÃO aceita `clientName`/`clientPhone` e a ValidationPipe
+   * global roda com `forbidNonWhitelisted` — enviar esses campos é 400. */
+  if (body && ('clientName' in body || 'clientPhone' in body)) {
+    throw new ApiError(400, 'propriedades clientName/clientPhone não são permitidas')
+  }
+  const { serviceId, locationId, startsAt, endsAt, employeeMembershipId } = body || {}
   if (!serviceId || !startsAt) throw new ApiError(422, 'serviceId e startsAt são obrigatórios')
   const service = db.services.find((s) => s.id === serviceId)
-  const end = endsAt || new Date(new Date(startsAt).getTime() + (service?.durationMinutes ?? 30) * 60000).toISOString()
-  const clientId = nextId('cust')
+  /* O slot real tem duração `durationMinutes + bufferMinutes`. */
+  const slotMinutes = (service?.durationMinutes ?? 30) + (service?.bufferMinutes ?? 0)
+  const end = endsAt || new Date(new Date(startsAt).getTime() + slotMinutes * 60000).toISOString()
+  const customerUserId = nextId('cust')
   const appointment: MockAppointment = {
     id: nextId('apt'),
     appointmentId: nextId('apt'),
     businessId,
     locationId: locationId || '',
     serviceId,
-    clientId,
+    customerUserId,
     employeeMembershipId: employeeMembershipId || db.memberships.find((m) => m.businessId === businessId)?.id,
     status: 'PENDING',
     startsAt,
     endsAt: end,
     priceCents: service?.priceCents,
     service,
-    client: { id: clientId, name: clientName || 'Cliente online', email: '', phone: clientPhone || undefined },
+    customer: { id: customerUserId, name: 'Cliente online', email: '', phone: undefined },
     createdAt: new Date().toISOString(),
   }
   db.appointments.push(appointment)
@@ -1225,7 +1424,8 @@ function handleSlots(businessId: string, query: URLSearchParams): unknown[] {
   const db = getDb()
   const serviceId = query.get('serviceId')
   const service = db.services.find((s) => s.id === serviceId)
-  const duration = service?.durationMinutes ?? 30
+  /* O slot real tem duração `durationMinutes + bufferMinutes`. */
+  const duration = (service?.durationMinutes ?? 30) + (service?.bufferMinutes ?? 0)
 
   const fromKey = query.get('dateFrom') ? toDateKey(query.get('dateFrom')!) : dateOffsetKey(0)
   const toKey = query.get('dateTo') ? toDateKey(query.get('dateTo')!) : fromKey
@@ -1250,10 +1450,18 @@ function handleSlots(businessId: string, query: URLSearchParams): unknown[] {
         if (start.getHours() < 9) continue
         const pro = proPool[index % proPool.length]
         index++
+        const startsAt = start.toISOString()
+        const endsAt = new Date(start.getTime() + duration * 60000).toISOString()
         slots.push({
-          startsAt: start.toISOString(),
-          endsAt: new Date(start.getTime() + duration * 60000).toISOString(),
+          /* O backend expõe as duas grafias: `startAt`/`endAt` (histórico) e
+           * `startsAt`/`endsAt` (aliases consumidos pelo front). */
+          startAt: startsAt,
+          endAt: endsAt,
+          startsAt,
+          endsAt,
+          professionalId: pro?.id || 'mem_1',
           employeeMembershipId: pro?.id || 'mem_1',
+          professionalName: pro?.user?.name,
           employeeName: pro?.user?.name,
           position: pro?.position,
         })

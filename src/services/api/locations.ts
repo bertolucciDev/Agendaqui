@@ -1,12 +1,32 @@
 import { apiClient } from '@/lib/axios/client'
-import type { Location, Holiday } from '@/types'
+import type { Location, Holiday, PaginatedResponse } from '@/types'
+
+/**
+ * O backend devolve as listas paginadas no formato
+ * `{ data, total, limit, offset }`. Aceitamos também um array puro para
+ * não quebrar contra versões antigas da API.
+ */
+function unwrapList<T>(
+  payload: T[] | PaginatedResponse<T> | null | undefined
+): T[] {
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.data)) return payload.data
+  return []
+}
 
 export const locationsApi = {
-  list: async (businessId: string) => {
-    const { data } = await apiClient.get<Location[]>(
-      `businesses/${businessId}/locations`
+  /**
+   * `GET /locations/business/:businessId/locations`
+   *
+   * A rota pública `GET /businesses/:slug/locations` é indexada por SLUG e
+   * devolve a visão pública do negócio; usá-la com o id do negócio (que é o
+   * que a sessão expõe) fazia a tela de Locais voltar vazia.
+   */
+  list: async (businessId: string): Promise<Location[]> => {
+    const { data } = await apiClient.get<Location[] | PaginatedResponse<Location>>(
+      `locations/business/${businessId}/locations`
     )
-    return data
+    return unwrapList(data)
   },
 
   create: async (
@@ -19,6 +39,7 @@ export const locationsApi = {
       longitude?: number
       attendanceType?: string
       phone?: string
+      isHeadquarter?: boolean
     }
   ) => {
     const { data } = await apiClient.post<Location>(

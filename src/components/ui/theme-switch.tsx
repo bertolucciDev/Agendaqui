@@ -8,7 +8,7 @@ const OPTIONS = [
   { value: 'system', label: 'Sistema', icon: Monitor },
 ] as const
 
-export function ThemeSwitch() {
+export function ThemeSwitch({ showLabel }: { showLabel?: boolean } = {}) {
   const { theme, setTheme } = useTheme()
 
   return (
@@ -26,15 +26,15 @@ export function ThemeSwitch() {
           aria-label={`Tema: ${label}`}
           onClick={() => setTheme(value)}
           className={cn(
-            'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors duration-150',
+            'flex items-center justify-center rounded-md px-2.5 py-2 text-sm font-medium transition-colors duration-150',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-1',
             theme === value
               ? 'bg-muted text-foreground shadow-xs'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           )}
         >
-          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="hidden sm:inline">{label}</span>
+          <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span className={showLabel ? 'ml-1.5' : 'hidden'}>{label}</span>
         </button>
       ))}
     </div>

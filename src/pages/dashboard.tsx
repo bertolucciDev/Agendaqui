@@ -8,12 +8,14 @@ import { appointmentsApi } from '@/services/api/appointments'
 import { staffApi } from '@/services/api/staff'
 import { useAuth } from '@/app/providers/auth'
 import { useActiveBusiness } from '@/app/hooks/use-active-business'
+import { useWorkspace } from '@/app/providers/workspace'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 
 export default function DashboardPage() {
   const today = new Date().toISOString().split('T')[0]
   const { user } = useAuth()
   const { businessId, businesses, activeMode } = useActiveBusiness()
+  const { activeMembership } = useWorkspace()
 
   const { data: employees = [] } = useQuery({
     queryKey: ['business-employees', activeMode, businessId],
@@ -21,7 +23,13 @@ export default function DashboardPage() {
     enabled: !!businessId,
   })
 
-  const currentMembership = employees.find((m) => m.userId === user?.id)
+  /**
+   * Vínculo do usuário no contexto ativo. A sessão (`GET /me/session`) é a
+   * fonte de verdade (é location-aware); a lista de funcionários é apenas o
+   * fallback para quando o contexto ainda não resolveu.
+   */
+  const fallbackMembership = employees.find((m) => m.userId === user?.id)
+  const currentMembership = activeMembership ?? fallbackMembership
   const currentRole = currentMembership?.role
   const currentMembershipId = currentMembership?.id
 
@@ -41,7 +49,7 @@ export default function DashboardPage() {
   const todayRevenue = todayAppointments
     .filter((a) => a.status === 'COMPLETED' || a.status === 'CONFIRMED')
     .reduce((sum, a) => sum + (a.service?.priceCents ?? 0), 0)
-  const uniqueClients = new Set(todayAppointments.map((a) => a.clientId)).size
+  const uniqueClients = new Set(todayAppointments.map((a) => a.customerUserId)).size
 
   const appointmentDays = todayAppointments.map((a) => new Date(a.startsAt).getDate())
 
