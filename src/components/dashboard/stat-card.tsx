@@ -31,8 +31,8 @@ export function StatCard({ icon: Icon, label, value, trend = 'neutral', trendVal
   return (
     <div className="stat-card">
       <div className="flex items-center justify-between">
-        <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', colors.bg)}>
-          <Icon className={cn('h-5 w-5', colors.icon)} />
+        <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl sm:h-10 sm:w-10', colors.bg)}>
+          <Icon className={cn('h-4 w-4 sm:h-5 sm:w-5', colors.icon)} />
         </div>
         {trendValue && (
           <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', trendInfo.bg, trendInfo.color)}>
@@ -41,7 +41,7 @@ export function StatCard({ icon: Icon, label, value, trend = 'neutral', trendVal
           </span>
         )}
       </div>
-      <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">{value}</p>
+      <p className="mt-2 text-xl font-bold tracking-tight text-foreground sm:text-2xl">{value}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
     </div>
   )

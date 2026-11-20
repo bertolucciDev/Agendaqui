@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { isMockEnabled, initMock } from '@/lib/mock'
+import { notify } from '@/lib/notify'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -41,6 +42,22 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config
     const status = error.response?.status
     const url = originalRequest?.url || ''
+
+    /* Falha de rede (sem resposta HTTP): o usuário precisa saber que o
+     * problema é a conexão, não a ação dele. Avisamos uma vez por rajada
+     * para não inundar a tela de toasts. */
+    if (status === undefined && !originalRequest?._offlineNotified) {
+      originalRequest._offlineNotified = true
+      notify.error('Sem conexão com o servidor. Verifique sua internet.', {
+        action: {
+          label: 'Tentar novamente',
+          onClick: () => {
+            originalRequest._offlineNotified = false
+            void apiClient(originalRequest)
+          },
+        },
+      })
+    }
 
     const isAuthEndpoint =
       url.includes('auth/login') ||

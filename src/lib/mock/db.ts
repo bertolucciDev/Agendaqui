@@ -31,7 +31,7 @@ export interface MockCategory {
   phone?: string
   sellsProducts?: boolean
   cancellationPolicyHours?: number
-  status?: 'ACTIVE' | 'INACTIVE'
+  status?: 'ACTIVE' | 'INACTIVE' | 'BLOCKED'
   timezone?: string
   attendanceType?: string
   createdAt: string
@@ -85,10 +85,9 @@ export interface MockWorkingHoursEntry {
   /* ───── CONTRACT FREEZE: GET /me/session (docs/CONTRACT-me-session.md) ───── */
 
   export interface MockCustomerProfile {
-    id: string
     userId: string
     reputation: number
-    strikes: number
+    strikeCount: number
   }
 
   export type SessionMode = 'OWNER' | 'PROFESSIONAL' | 'CUSTOMER'
@@ -134,16 +133,16 @@ export interface MockAppointment {
   businessId: string
   locationId: string
   serviceId: string
-  clientId: string
+  customerUserId: string
   employeeMembershipId?: string
   status: MockAppointmentStatus
   startsAt: string
   endsAt: string
   priceCents?: number
-  cancelReason?: string
+  cancellationReason?: string
   service?: Partial<MockService>
-  employee?: Partial<MockMembership>
-  client?: { id: string; name: string; email: string; phone?: string }
+  employeeMembership?: Partial<MockMembership>
+  customer?: { id: string; name: string; email: string; phone?: string }
   createdAt: string
 }
 
@@ -584,23 +583,23 @@ function buildSeed(): MockDb {
       businessId: 'biz_demo',
       locationId: 'loc_demo',
       serviceId: r.serviceId,
-      clientId: client.id,
+      customerUserId: client.id,
       employeeMembershipId: r.memberId,
       status: r.status,
       startsAt: start,
       endsAt: end,
       priceCents: service?.priceCents,
       service,
-      employee: member,
-      client: { id: client.id, name: client.name, email: '', phone: client.phone },
+      employeeMembership: member,
+      customer: { id: client.id, name: client.name, email: '', phone: client.phone },
       createdAt: daysAgo(3),
     }
   })
 
     const customerProfiles: MockCustomerProfile[] = [
-      { id: 'cp_demo', userId: 'u_demo', reputation: 5, strikes: 0 },
-      { id: 'cp_olivia', userId: 'u_olivia', reputation: 5, strikes: 0 },
-      { id: 'cp_cust', userId: 'u_cust', reputation: 5, strikes: 0 },
+      { userId: 'u_demo', reputation: 5, strikeCount: 0 },
+      { userId: 'u_olivia', reputation: 5, strikeCount: 0 },
+      { userId: 'u_cust', reputation: 5, strikeCount: 0 },
     ]
 
     return {

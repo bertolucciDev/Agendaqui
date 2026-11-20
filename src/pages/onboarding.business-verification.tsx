@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useBusinessVerification } from '@/hooks/use-business-verification'
 import { useSession } from '@/app/providers/session'
 import { DOCUMENT_LABELS, REJECTION_LABELS } from '@/lib/verification/document-rules'
@@ -62,13 +62,29 @@ function canReopen(data: { status: BusinessVerification['status'] }): boolean {
   return data.status === 'EXPIRED' || data.status === 'CANCELLED'
 }
 
+function DashboardBackLink({ visible }: { visible: boolean }) {
+  if (!visible) return null
+
+  return (
+    <Link
+      to="/dashboard"
+      aria-label="Voltar ao dashboard"
+      title="Voltar ao dashboard"
+      className="fixed left-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+    </Link>
+  )
+}
+
 export default function OnboardingBusinessVerificationPage() {
   const navigate = useNavigate()
-  const { refreshSession } = useSession()
+  const { session, refreshSession } = useSession()
   const { verification: data, isLoading, error, refetch, d8Outcome } = useBusinessVerification()
 
   const status = data?.status
   const empty = data !== undefined && isEmpty(data)
+  const canReturnToDashboard = (session?.businesses.length ?? 0) > 0
 
   useEffect(() => {
     if (status !== 'APPROVED') return
@@ -78,43 +94,52 @@ export default function OnboardingBusinessVerificationPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-      </div>
+      <>
+        <DashboardBackLink visible={canReturnToDashboard} />
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+        </div>
+      </>
     )
   }
 
   if (error) {
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-4 px-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Não foi possível carregar sua solicitação</CardTitle>
-            <CardDescription>{describeError(error, 'load')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => void refetch()}>Tentar novamente</Button>
-          </CardContent>
-        </Card>
-      </div>
+      <>
+        <DashboardBackLink visible={canReturnToDashboard} />
+        <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-4 px-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Não foi possível carregar sua solicitação</CardTitle>
+              <CardDescription>{describeError(error, 'load')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => void refetch()}>Tentar novamente</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </>
     )
   }
 
   if (!data || empty || status === 'DRAFT') {
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-4 px-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nenhuma verificação em andamento</CardTitle>
-            <CardDescription>Você ainda não abriu uma solicitação de verificação.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link to="/onboarding/business">
-              <Button>Começar verificação</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <>
+        <DashboardBackLink visible={canReturnToDashboard} />
+        <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-4 px-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Nenhuma verificação em andamento</CardTitle>
+              <CardDescription>Você ainda não abriu uma solicitação de verificação.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link to="/onboarding/business">
+                <Button>Começar verificação</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </>
     )
   }
 
@@ -122,6 +147,7 @@ export default function OnboardingBusinessVerificationPage() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-4 px-4">
+      <DashboardBackLink visible={canReturnToDashboard} />
       <Card>
         <CardHeader>
           <CardTitle className={view.tone}>{view.title}</CardTitle>

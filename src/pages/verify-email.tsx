@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '@/services/api'
+import { extractApiMessage, extractApiStatus } from '@/lib/api-error'
 import { useAuth } from '@/app/providers/auth'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 import { CheckCircle2, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -34,10 +35,11 @@ export default function VerifyEmailPage() {
     setIsResending(true)
     try {
       await authApi.resendVerificationEmail(email)
-      toast.success('Código reenviado! Verifique seu e-mail.')
+      notify.success('Código reenviado! Verifique seu e-mail.')
       setResendCooldown(60)
-    } catch {
-      toast.error('Não foi possível reenviar. Tente novamente em instantes.')
+    } catch (err: unknown) {
+      const message = extractApiMessage(err)
+      notify.error(message ?? 'Não foi possível reenviar. Tente novamente em instantes.')
     } finally {
       setIsResending(false)
     }
@@ -79,7 +81,7 @@ export default function VerifyEmailPage() {
     e.preventDefault()
     const codeStr = code.join('')
     if (codeStr.length !== 6) {
-      toast.error('Digite o código completo de 6 dígitos')
+      notify.error('Digite o código completo de 6 caracteres')
       return
     }
 
@@ -87,19 +89,23 @@ export default function VerifyEmailPage() {
     try {
       await authApi.verifyEmail(email, codeStr)
       setIsVerified(true)
-      toast.success('E-mail verificado com sucesso!')
-    } catch (err: any) {
-      const status = err?.response?.status
+      notify.success('E-mail verificado com sucesso!')
+    } catch (err: unknown) {
+      const status = extractApiStatus(err)
+      const message = extractApiMessage(err)
+
       if (status === 400 || status === 422) {
-        toast.error('Código inválido. Verifique o código enviado ao seu e-mail.')
+        notify.error(message ?? 'Código inválido. Verifique o código enviado ao seu e-mail.')
       } else if (status === 404) {
-        toast.error('E-mail não encontrado. Solicite um novo código.')
+        notify.error('E-mail não encontrado. Solicite um novo código.')
+      } else if (status === 429) {
+        notify.error(message ?? 'Muitas tentativas. Solicite um novo código.')
       } else if (status === 500) {
-        toast.error('Erro no servidor. Tente novamente em instantes.')
-      } else if (!err?.response) {
-        toast.error('Sem conexão. Verifique sua internet.')
+        notify.error('Erro no servidor. Tente novamente em instantes.')
+      } else if (!status) {
+        notify.error('Sem conexão. Verifique sua internet.')
       } else {
-        toast.error('Código inválido ou expirado. Solicite um novo.')
+        notify.error(message ?? 'Código inválido ou expirado. Solicite um novo.')
       }
     } finally {
       setIsLoading(false)
@@ -161,7 +167,7 @@ export default function VerifyEmailPage() {
           Verificar e-mail
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Digite o código de 6 dígitos enviado para{' '}
+          Digite o código de 6 caracteres enviado para{' '}
           <span className="font-medium text-foreground">{email || 'seu e-mail'}</span>
         </p>
 

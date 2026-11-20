@@ -105,33 +105,44 @@ export async function uploadVerificationDocument(
     throw error
   }
 
-  onPhase('uploading')
+  // Sem URL: modo banco de dados — enviamos o arquivo direto no `complete`.
+  const isDatabaseMode = !presign.url
 
-  let response: Response
-  try {
-    response = await deps.put(presign.url, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Type': file.type },
-    })
-  } catch (error) {
-    onPhase('error')
-    throw new DocumentUploadError(describeError(error, 'upload'), 'upload')
+  if (!isDatabaseMode) {
+    onPhase('uploading')
+
+    let response: Response
+    try {
+      response = await deps.put(presign.url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+          'If-None-Match': '*',
+        },
+      })
+    } catch (error) {
+      onPhase('error')
+      throw new DocumentUploadError(describeError(error, 'upload'), 'upload')
+    }
+
+    if (!response.ok) {
+      onPhase('error')
+      throw new DocumentUploadError(
+        `O armazenamento recusou o arquivo (HTTP ${response.status}). Tente novamente.`,
+        'upload',
+      )
+    }
+
+    onPhase('uploaded')
   }
-
-  if (!response.ok) {
-    onPhase('error')
-    throw new DocumentUploadError(
-      `O armazenamento recusou o arquivo (HTTP ${response.status}). Tente novamente.`,
-      'upload',
-    )
-  }
-
-  onPhase('uploaded')
 
   try {
     const sha256 = await deps.hash(file)
-    const result = await deps.complete({ documentType, storageKey: presign.storageKey, sha256 })
+    const result = await deps.complete(
+      { documentType, storageKey: presign.storageKey, sha256 },
+      isDatabaseMode ? file : undefined,
+    )
     onPhase('completed')
     return result
   } catch (error) {

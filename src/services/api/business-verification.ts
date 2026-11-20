@@ -15,7 +15,6 @@ export interface CreateVerificationPayload {
   categoryId: string
   legalName?: string
   responsibleName?: string
-  responsibleCpf?: string
   phone?: string
   timezone?: string
   attendanceType?: BusinessVerificationAttendanceType
@@ -74,9 +73,9 @@ export const businessVerificationApi = {
   },
 
   /**
-   * POST /me/business-verification/documents/presign — signed URL de 60s.
-   * Não grava documento; a chave do objeto vem no corpo porque não é
-   * derivável da URL assinada.
+   * POST /me/business-verification/documents/presign — gera chave de upload.
+   * Quando R2 está configurado, devolve URL assinada. Quando não, a URL é vazia
+   * e o arquivo deve ser enviado no `complete` como multipart/form-data.
    */
   presignDocument: async (payload: {
     documentType: BusinessVerificationDocumentType
@@ -91,9 +90,22 @@ export const businessVerificationApi = {
 
   /** POST /me/business-verification/documents/complete — valida e versiona.
    *
-   * O DTO aceita SOMENTE estes três campos: tamanho e tipo são lidos do próprio
-   * objeto no storage, e enviá-los aqui seria 400 (`forbidNonWhitelisted`). */
-  completeDocument: async (payload: CompleteDocumentPayload): Promise<CompleteDocumentResult> => {
+   * Quando R2 está ativo, envia JSON com storageKey + sha256.
+   * Quando banco de dados, envia multipart/form-data com arquivo. */
+  completeDocument: async (payload: CompleteDocumentPayload, file?: File): Promise<CompleteDocumentResult> => {
+    if (file) {
+      const form = new FormData()
+      form.append('documentType', payload.documentType)
+      form.append('storageKey', payload.storageKey)
+      form.append('sha256', payload.sha256)
+      form.append('file', file)
+      const { data } = await apiClient.post<CompleteDocumentResult>(
+        'me/business-verification/documents/complete',
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      return data
+    }
     const { data } = await apiClient.post<CompleteDocumentResult>(
       'me/business-verification/documents/complete',
       payload,

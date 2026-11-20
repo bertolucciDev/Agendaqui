@@ -1,37 +1,72 @@
 import { useState } from 'react'
 import { useAuth } from '@/app/providers/auth'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi, usersApi } from '@/services/api'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { changePasswordSchema, type ChangePasswordFormData } from '@/lib/validations'
+import { extractApiMessage, extractApiStatus, isWrongCurrentPassword } from '@/lib/api-error'
+import {
+  loadNotificationPreferences,
+  saveNotificationPreferences,
+  type NotificationPreferences,
+} from '@/lib/notification-preferences'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PrivacyRequestsPanel } from '@/components/settings/privacy-requests-panel'
 import {
   User,
   Shield,
+  LockKeyhole,
   LogOut,
   Key,
   Bell,
   Save,
 } from 'lucide-react'
 
-export default function SettingsPage() {
+const NOTIFICATION_ITEMS: { key: keyof NotificationPreferences; label: string; description: string }[] = [
+  { key: 'appointments', label: 'Novos agendamentos', description: 'Receber aviso quando um cliente agendar' },
+  { key: 'cancellations', label: 'Cancelamentos', description: 'Receber aviso quando um agendamento for cancelado' },
+  { key: 'reminders', label: 'Lembretes', description: 'Receber lembretes antes dos agendamentos' },
+]
+
+export default function SettingsPage({ supportMode = false }: { supportMode?: boolean }) {
   const { user, logout, updateUser } = useAuth()
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'privacy'>('profile')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileName, setProfileName] = useState(user?.name || '')
   const [profilePhone, setProfilePhone] = useState(user?.phone || '')
+  const [emailChangeInput, setEmailChangeInput] = useState('')
+  const [emailChangeTarget, setEmailChangeTarget] = useState('')
+  const [emailChangeCode, setEmailChangeCode] = useState('')
+  const pendingEmailChangeQuery = useQuery({
+    queryKey: ['auth', 'email-change', 'pending'],
+    queryFn: authApi.getPendingEmailChange,
+  })
+  const visibleEmailChangeTarget = emailChangeTarget || pendingEmailChangeQuery.data?.email || ''
+  const [notifications, setNotifications] = useState<NotificationPreferences>(() =>
+    loadNotificationPreferences()
+  )
+  const notificationItems = supportMode
+    ? [...NOTIFICATION_ITEMS, {
+        key: 'supportTicketSound' as const,
+        label: 'Som para novos chamados',
+        description: 'Tocar um aviso quando um novo chamado chegar à central de suporte',
+      }]
+    : NOTIFICATION_ITEMS
 
   const logoutAllMutation = useMutation({
     mutationFn: authApi.logoutAll,
     onSuccess: () => {
-      toast.success('Todas as sessões foram encerradas')
+      notify.success('Todas as sessões foram encerradas')
       queryClient.clear()
       logout()
+    },
+    onError: (err: unknown) => {
+      notify.error(extractApiMessage(err) ?? 'Não foi possível encerrar as sessões.')
     },
   })
 
@@ -43,36 +78,84 @@ export default function SettingsPage() {
     mutationFn: (data: ChangePasswordFormData) =>
       authApi.changePassword(data.currentPassword, data.newPassword),
     onSuccess: () => {
-      toast.success('Senha alterada com sucesso!')
+      notify.success('Senha alterada com sucesso!')
       reset()
     },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.message
-      if (msg?.includes('Invalid credentials') || msg?.includes('wrong')) {
-        toast.error('Senha atual incorreta')
+    onError: (err: unknown) => {
+      /* O `message` do ValidationPipe chega como ARRAY de strings — nunca
+       * usamos `includes` direto nele (daria sempre false). */
+      const message = extractApiMessage(err)
+      const status = extractApiStatus(err)
+
+      if (isWrongCurrentPassword(err)) {
+        notify.error('Senha atual incorreta')
+      } else if (status === 400 && message) {
+        notify.error(message)
       } else {
-        toast.error('Erro ao alterar senha')
+        notify.error(message ?? 'Não foi possível alterar a senha. Tente novamente.')
       }
     },
+  })
+
+  const requestEmailChangeMutation = useMutation({
+    mutationFn: () => authApi.requestEmailChange(emailChangeInput),
+    onSuccess: async () => {
+      const target = emailChangeInput.trim().toLowerCase()
+      setEmailChangeTarget(target)
+      setEmailChangeCode('')
+      await queryClient.invalidateQueries({ queryKey: ['auth', 'email-change', 'pending'] })
+      notify.success(`Enviamos um código para ${target}. Seu e-mail atual continua ativo até a confirmação.`)
+    },
+    onError: (error: unknown) => notify.error(extractApiMessage(error) ?? 'Não foi possível enviar o código.'),
+  })
+
+  const verifyEmailChangeMutation = useMutation({
+    mutationFn: () => authApi.verifyEmailChange(emailChangeCode.trim()),
+    onSuccess: () => {
+      updateUser({ email: visibleEmailChangeTarget })
+      setEmailChangeInput('')
+      setEmailChangeTarget('')
+      setEmailChangeCode('')
+      queryClient.setQueryData(['auth', 'email-change', 'pending'], null)
+      notify.success('E-mail atualizado e confirmado.')
+    },
+    onError: (error: unknown) => notify.error(extractApiMessage(error) ?? 'Não foi possível confirmar o e-mail.'),
   })
 
   const handleSaveProfile = async () => {
     setIsSavingProfile(true)
     try {
-      await usersApi.updateProfile({ name: profileName, phone: profilePhone || undefined })
-      updateUser({ name: profileName, phone: profilePhone })
-      toast.success('Perfil atualizado!')
-    } catch {
-      toast.error('Erro ao atualizar perfil')
+      const updated = await usersApi.updateProfile({
+        name: profileName,
+        phone: profilePhone || null,
+      })
+      updateUser({ name: updated?.name ?? profileName, phone: updated?.phone ?? profilePhone })
+      notify.success('Perfil atualizado!')
+    } catch (err: unknown) {
+      const message = extractApiMessage(err)
+      notify.error(
+        message
+          ? `Não foi possível salvar o perfil: ${message}`
+          : 'Não foi possível salvar o perfil. Tente novamente em instantes.'
+      )
     } finally {
       setIsSavingProfile(false)
     }
+  }
+
+  const toggleNotification = (key: keyof NotificationPreferences) => {
+    setNotifications((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      saveNotificationPreferences(next)
+      return next
+    })
   }
 
   const tabs = [
     { id: 'profile' as const, icon: User, label: 'Perfil' },
     { id: 'security' as const, icon: Shield, label: 'Segurança' },
     { id: 'notifications' as const, icon: Bell, label: 'Notificações' },
+    { id: 'privacy' as const, icon: LockKeyhole, label: 'Privacidade' },
   ]
 
   return (
@@ -150,8 +233,9 @@ export default function SettingsPage() {
                           />
                         </div>
                         <div>
-                          <label className="label">E-mail</label>
+                          <label className="label" htmlFor="current-email">E-mail atual</label>
                           <Input
+                            id="current-email"
                             className="mt-1.5"
                             value={user?.email || ''}
                             disabled
@@ -174,6 +258,54 @@ export default function SettingsPage() {
                         <Save className="h-4 w-4" />
                         Salvar alterações
                       </Button>
+                    </div>
+                    <div className="mt-6 border-t border-border pt-5">
+                      <h4 className="text-sm font-semibold text-foreground">Alterar e-mail</h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Enviaremos um código ao novo endereço. O e-mail atual só muda depois da confirmação.
+                      </p>
+                      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <Input
+                          id="new-account-email"
+                          type="email"
+                          label="Novo e-mail"
+                          autoComplete="email"
+                          value={emailChangeInput}
+                          onChange={(event) => setEmailChangeInput(event.target.value)}
+                        />
+                        <Button
+                          variant="outline"
+                          loading={requestEmailChangeMutation.isPending}
+                          disabled={!emailChangeInput.trim() || emailChangeInput.trim().toLowerCase() === user?.email?.toLowerCase()}
+                          onClick={() => requestEmailChangeMutation.mutate()}
+                        >
+                          Enviar código
+                        </Button>
+                      </div>
+                      {pendingEmailChangeQuery.isError && (
+                        <p role="alert" className="mt-2 text-xs text-destructive">
+                          Não foi possível consultar uma confirmação pendente. Você pode solicitar um novo código.
+                        </p>
+                      )}
+                      {visibleEmailChangeTarget && (
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                          <Input
+                            id="email-change-code"
+                            label={`Código enviado para ${visibleEmailChangeTarget}`}
+                            autoComplete="one-time-code"
+                            maxLength={32}
+                            value={emailChangeCode}
+                            onChange={(event) => setEmailChangeCode(event.target.value)}
+                          />
+                          <Button
+                            loading={verifyEmailChangeMutation.isPending}
+                            disabled={!emailChangeCode.trim()}
+                            onClick={() => verifyEmailChangeMutation.mutate()}
+                          >
+                            Confirmar novo e-mail
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>
@@ -279,14 +411,9 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {[
-                      { label: 'Novos agendamentos', description: 'Receber aviso quando um cliente agendar', enabled: true },
-                      { label: 'Cancelamentos', description: 'Receber aviso quando um agendamento for cancelado', enabled: true },
-                      { label: 'Lembretes', description: 'Receber lembretes antes dos agendamentos', enabled: false },
-                      { label: 'Promoções', description: 'Novidades e dicas do Agendaqui', enabled: false },
-                    ].map((item, i) => (
+                    {notificationItems.map((item) => (
                       <label
-                        key={i}
+                        key={item.key}
                         className="flex items-center justify-between rounded-xl border border-border p-4 transition-all hover:border-border-strong"
                       >
                         <div>
@@ -296,7 +423,9 @@ export default function SettingsPage() {
                         <div className="relative">
                           <input
                             type="checkbox"
-                            defaultChecked={item.enabled}
+                            checked={notifications[item.key]}
+                            onChange={() => toggleNotification(item.key)}
+                            aria-label={item.label}
                             className="peer sr-only"
                           />
                           <div className="h-6 w-11 rounded-full bg-border transition-colors peer-checked:bg-primary">
@@ -306,8 +435,21 @@ export default function SettingsPage() {
                       </label>
                     ))}
                   </div>
+
+                  {supportMode ? (
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      A preferência de som fica salva apenas neste navegador. Por segurança, o navegador libera o áudio após uma interação sua com a área de suporte.
+                    </p>
+                  ) : null}
+                  <p className="mt-4 text-xs text-muted-foreground">
+                    {supportMode
+                      ? 'Estas preferências ficam salvas apenas neste navegador; as opções de agendamentos ainda não enviam notificações.'
+                      : 'Estas preferências ficam salvas apenas neste navegador (dispositivo). O servidor ainda não oferece preferências de notificação — ao entrar em outro dispositivo, elas voltam ao padrão. No momento, estas opções ainda não controlam o envio de notificações.'}
+                  </p>
                 </div>
               )}
+
+              {activeTab === 'privacy' && <PrivacyRequestsPanel />}
             </div>
           </div>
         </div>

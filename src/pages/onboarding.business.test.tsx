@@ -452,12 +452,12 @@ describe('O-06/O-14 — presign, upload e complete', () => {
       contentType: 'application/pdf',
     })
     expect(globalThis.fetch).toHaveBeenCalledWith('https://signed.example/u?token=t', expect.anything())
-    // complete leva SOMENTE os três campos do DTO.
+    // complete leva SOMENTE os três campos do DTO; segundo arg é undefined no modo R2.
     expect(completeDocument).toHaveBeenCalledWith({
       documentType: 'COMPROVANTE_CNPJ',
       storageKey: 'documents/v1/COMPROVANTE_CNPJ/uuid.pdf',
       sha256: 'b'.repeat(64),
-    })
+    }, undefined)
     await waitFor(() =>
       expect(screen.getByTestId('doc-state-COMPROVANTE_CNPJ').textContent).toContain('Concluído'),
     )

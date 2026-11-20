@@ -79,11 +79,12 @@ describe('uploadVerificationDocument', () => {
     await uploadVerificationDocument(file(), 'CPF_FRENTE', () => {}, d)
 
     // Campos extras aqui seriam 400 (forbidNonWhitelisted no backend).
+    // Segundo argumento é undefined no modo R2 (sem banco de dados).
     expect(d.complete).toHaveBeenCalledWith({
       documentType: 'CPF_FRENTE',
       storageKey: 'documents/v1/CPF_FRENTE/uuid.jpg',
       sha256: 'a'.repeat(64),
-    })
+    }, undefined)
   })
 
   it('O-14: recusa formato não aceito antes de gastar a signed URL', async () => {

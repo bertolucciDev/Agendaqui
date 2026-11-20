@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { handleRequest, ApiError } from './handlers'
-import { getDb, resetDb } from './db'
+import { getDb, resetDb, saveDb, nextId, type MockDb } from './db'
 
 /**
  * FE-API-01 — paridade do mock do PATCH /me/preferences com o backend (pós P2-A/B):
@@ -20,9 +20,50 @@ function freshUser(email: string): string {
   return (r.body as { id: string }).id
 }
 
+/**
+ * Fixture de negócio.
+ *
+ * A rota de produto `POST /businesses` responde **410** no mock — igual ao
+ * backend real, onde a criação passou pelo fluxo de Business Verification.
+ * O teste semeia o negócio direto no banco do mock, que é o caminho de
+ * fixture correto.
+ */
 function createBusiness(name: string): string {
-  const r = handleRequest('post', '/businesses', q(), { name, locationName: 'L1' })
-  return (r.body as { id: string }).id
+  const db = getDb()
+  const token = localStorage.getItem('accessToken') ?? ''
+  const ownerId = token.startsWith('mock-user-') ? token.slice('mock-user-'.length) : db.sessionUserId
+  const owner = db.users.find((u) => u.id === ownerId) ?? db.users[0]
+  const businessId = nextId('biz')
+  const locationId = nextId('loc')
+  const now = new Date().toISOString()
+  db.businesses.push({
+    id: businessId,
+    name,
+    slug: name.toLowerCase().replace(/\s+/g, '-'),
+    document: String(db.businesses.length + 1).padStart(11, '0'),
+    type: 'COMPANY',
+    categoryId: db.categories[0]?.id ?? '',
+    ownerUserId: owner?.id ?? '',
+    description: undefined,
+    phone: undefined,
+    timezone: 'America/Sao_Paulo',
+    attendanceType: 'AT_LOCATION',
+    status: 'ACTIVE',
+    createdAt: now,
+  } as MockDb['businesses'][number])
+  db.locations.push({
+    id: locationId,
+    businessId,
+    name: 'L1',
+    address: '',
+    timezone: 'America/Sao_Paulo',
+    attendanceType: 'AT_LOCATION',
+    phone: null,
+    status: 'ACTIVE',
+    isHeadquarter: true,
+  } as MockDb['locations'][number])
+  saveDb()
+  return businessId
 }
 
 beforeEach(() => {

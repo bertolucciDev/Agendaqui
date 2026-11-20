@@ -26,6 +26,9 @@ export function FirstBusinessGuard({ children }: { children: ReactNode }) {
   const hasAdministrativeBusiness = session.businesses.length > 0
   const onOnboardingRoute = location.pathname.startsWith('/onboarding')
 
+  /* Admins de plataforma usam somente o painel administrativo. */
+  if (session.isPlatformAdmin) return <Navigate to="/admin" replace />
+
   if (!hasAdministrativeBusiness && !onOnboardingRoute) {
     return <Navigate to="/onboarding/business" replace />
   }

@@ -14,8 +14,9 @@ import { appointmentsApi } from '@/services/api/appointments'
 import { staffApi } from '@/services/api/staff'
 import { useAuth } from '@/app/providers/auth'
 import { useActiveBusiness } from '@/app/hooks/use-active-business'
+import { useWorkspace } from '@/app/providers/workspace'
 import { AppointmentActions } from '@/components/appointments/appointment-actions'
-import type { Appointment, AppointmentStatus } from '@/types'
+import type { AppointmentStatus } from '@/types'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -39,8 +40,13 @@ const MONTHS = [
 
 export default function AppointmentsPage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [view, setView] = useState<'week' | 'day'>('week')
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [view, setView] = useState<'week' | 'day'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) return 'day'
+    return 'week'
+  })
+  /* Guardamos o ID, não o objeto: o painel precisa refletir o estado novo
+   * depois de uma mutação (o backend devolve 204 e o front refaz o GET). */
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
 
   const weekStart = useMemo(() => {
     const d = new Date(selectedDate)
@@ -66,6 +72,7 @@ export default function AppointmentsPage() {
 
   const { user } = useAuth()
   const { businessId, activeMode } = useActiveBusiness()
+  const { activeMembership } = useWorkspace()
 
   const { data: employees = [] } = useQuery({
     queryKey: ['business-employees', activeMode, businessId],
@@ -73,7 +80,13 @@ export default function AppointmentsPage() {
     enabled: !!businessId,
   })
 
-  const currentMembership = employees.find((m) => m.userId === user?.id)
+  /**
+   * Vínculo do usuário no contexto ativo. A sessão (`GET /me/session`) é a
+   * fonte de verdade (é location-aware); a lista de funcionários é apenas o
+   * fallback para quando o contexto ainda não resolveu.
+   */
+  const fallbackMembership = employees.find((m) => m.userId === user?.id)
+  const currentMembership = activeMembership ?? fallbackMembership
   const currentRole = currentMembership?.role
   const currentMembershipId = currentMembership?.id
 
@@ -91,6 +104,11 @@ export default function AppointmentsPage() {
     enabled: !!businessId,
   })
 
+  const selectedAppointment = useMemo(
+    () => appointments.find((apt) => apt.id === selectedAppointmentId) ?? null,
+    [appointments, selectedAppointmentId]
+  )
+
   const prevWeek = () => {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() - 7)
@@ -105,9 +123,23 @@ export default function AppointmentsPage() {
 
   const goToToday = () => setSelectedDate(new Date())
 
+  /**
+   * Chave local (YYYY-MM-DD) de um instante.
+   *
+   * `toISOString()` devolve UTC, então `startsAt.split('T')[0]` agrupava o
+   * agendamento no dia UTC — um atendimento às 21h em São Paulo caía no dia
+   * seguinte. Comparamos sempre as partes locais dos dois lados.
+   */
+  const localDayKey = (date: Date): string => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
   const getAppointmentsForDay = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0]
-    return appointments.filter((apt) => apt.startsAt.split('T')[0] === dateStr)
+    const dateStr = localDayKey(date)
+    return appointments.filter((apt) => localDayKey(new Date(apt.startsAt)) === dateStr)
   }
 
   const getAppointmentsForHour = (date: Date, hour: number) => {
@@ -183,9 +215,10 @@ export default function AppointmentsPage() {
           </div>
 
           {/* Calendar Grid */}
-          <div className="card overflow-hidden">
+          <div className="card overflow-x-auto">
+            <div className="min-w-[640px]">
             {/* Day Headers */}
-            <div className={cn('grid border-b border-border', view === 'week' ? 'grid-cols-[4rem_repeat(7,1fr)]' : 'grid-cols-[4rem_1fr]')}>
+            <div className={cn('border-b border-border', view === 'week' ? 'grid grid-cols-[4rem_repeat(7,1fr)]' : 'grid grid-cols-[4rem_1fr]')}>
               <div className="border-r border-border bg-surface-sunken" />
               {(view === 'week' ? weekDays : [selectedDate]).map((day, i) => {
                 const isToday = day.toDateString() === new Date().toDateString()
@@ -215,7 +248,7 @@ export default function AppointmentsPage() {
             </div>
 
             {/* Time Grid */}
-            <div className={cn('grid', view === 'week' ? 'grid-cols-[4rem_repeat(7,1fr)]' : 'grid-cols-[4rem_1fr]')}>
+            <div className={cn('min-w-[640px]', view === 'week' ? 'grid grid-cols-[4rem_repeat(7,1fr)]' : 'grid grid-cols-[4rem_1fr]')}>
               {HOURS.map((hour) => (
                 <div key={hour} className="contents">
                   <div className="border-r border-b border-border-muted px-2 py-3 text-right">
@@ -238,7 +271,7 @@ export default function AppointmentsPage() {
                           return (
                             <button
                               key={apt.id}
-                              onClick={() => setSelectedAppointment(apt)}
+                              onClick={() => setSelectedAppointmentId(apt.id)}
                               className={cn(
                                 'w-full rounded-lg p-1.5 text-left text-xs transition-all hover:shadow-sm',
                                 status.className
@@ -263,6 +296,7 @@ export default function AppointmentsPage() {
                 </div>
               ))}
             </div>
+          </div>
           </div>
 
           {/* Empty State */}
@@ -291,7 +325,7 @@ export default function AppointmentsPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-foreground font-display">Detalhes</h3>
               <button
-                onClick={() => setSelectedAppointment(null)}
+                onClick={() => setSelectedAppointmentId(null)}
                 className="btn-ghost !p-1.5"
               >
                 <X className="h-4 w-4" />
@@ -337,7 +371,7 @@ export default function AppointmentsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {selectedAppointment.employee?.user?.name || 'Sem profissional'}
+                    {selectedAppointment.employeeMembership?.user?.name || 'Sem profissional'}
                   </p>
                   <p className="text-xs text-muted-foreground">Profissional</p>
                 </div>
@@ -349,9 +383,9 @@ export default function AppointmentsPage() {
                 </span>
               </div>
 
-              {selectedAppointment.cancelReason && (
+              {selectedAppointment.cancellationReason && (
                 <div className="rounded-lg border border-border bg-muted p-3 text-xs text-muted-foreground">
-                  <span className="font-semibold text-ink">Motivo do cancelamento:</span> {selectedAppointment.cancelReason}
+                  <span className="font-semibold text-ink">Motivo do cancelamento:</span> {selectedAppointment.cancellationReason}
                 </div>
               )}
 
@@ -361,7 +395,7 @@ export default function AppointmentsPage() {
                     appointment={selectedAppointment}
                     role={currentRole}
                     membershipId={currentMembershipId}
-                    onUpdated={(apt) => setSelectedAppointment(apt)}
+                    onUpdated={() => undefined}
                   />
                 </div>
               )}

@@ -10,25 +10,23 @@ export function maskPhone(value: string): string {
     .replace(/(\d{5})(\d)/, '$1-$2')
 }
 
-export function maskCpfCnpj(value: string): string {
-  const digits = value.replace(/\D/g, '')
-
-  if (digits.length <= 11) {
-    // CPF
-    return digits
-      .replace(/^(\d{3})(\d)/, '$1.$2')
-      .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-      .replace(/\.(\d{3})(\d)/, '.$1-$2')
-      .slice(0, 14)
-  }
-
-  // CNPJ
+export function maskCpf(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
   return digits
-    .replace(/^(\d{2})(\d)/, '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2')
-    .replace(/(\d{4})(\d)/, '$1-$2')
-    .slice(0, 18)
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2')
+}
+
+export function maskCnpj(value: string): string {
+  const characters = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14)
+  return (
+    characters.slice(0, 2) +
+    (characters.length > 2 ? `.${characters.slice(2, 5)}` : '') +
+    (characters.length > 5 ? `.${characters.slice(5, 8)}` : '') +
+    (characters.length > 8 ? `/${characters.slice(8, 12)}` : '') +
+    (characters.length > 12 ? `-${characters.slice(12, 14)}` : '')
+  )
 }
 
 export function maskCep(value: string): string {
@@ -38,9 +36,8 @@ export function maskCep(value: string): string {
     .replace(/(\d{5})(\d)/, '$1-$2')
 }
 
-export function detectDocumentType(value: string): 'cpf' | 'cnpj' {
-  const digits = value.replace(/\D/g, '')
-  return digits.length > 11 ? 'cnpj' : 'cpf'
+export function unmaskCnpj(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
 export function unmask(value: string): string {

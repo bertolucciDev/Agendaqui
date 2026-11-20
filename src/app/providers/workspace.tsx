@@ -1,8 +1,10 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { notify } from '@/lib/notify'
 import { useSession } from './session'
 import { sessionApi } from '@/services/api/session'
-import type { SessionBusiness, SessionMembership, SessionMode } from '@/types/session'
+import { extractApiMessage, extractApiStatus } from '@/lib/api-error'
+import type { MeSession, SessionBusiness, SessionMembership, SessionMode } from '@/types/session'
 
 /**
  * WorkspaceProvider — contexto ativo de UX (NÃO é autorização; o servidor valida sempre).
@@ -27,6 +29,8 @@ interface WorkspaceContextType {
   permissions: string[]
   needsSelection: boolean
   isContextReady: boolean
+  /** Modos do catálogo que são realmente utilizáveis por este usuário. */
+  availableModes: SessionMode[]
   /** Businesses compatíveis com o activeMode (membership com role que mapeia para o modo). */
   businessesForMode: SessionBusiness[]
   hasPermission: (p: string) => boolean
@@ -37,11 +41,25 @@ interface WorkspaceContextType {
 
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null)
 const CACHE_KEY = 'agendaqui:workspace'
+const EMPTY_MODES: SessionMode[] = []
 
+/** mode → roles de membership que dão acesso a esse mode (contrato congelado). */
 const MODE_ROLES: Record<SessionMode, SessionMembership['role'][]> = {
   OWNER: ['OWNER', 'MANAGER'],
   PROFESSIONAL: ['EMPLOYEE'],
   CUSTOMER: [],
+}
+
+/**
+ * Businesses compatíveis com um mode.
+ * PROFESSIONAL exige membership EMPLOYEE (uma membership MANAGER/OWNER NÃO
+ * habilita o modo PROFESSIONAL) — sem isso um usuário só-MANAGER ficava
+ * preso entre "modo sem negócio" e o seletor, em loop.
+ */
+function compatibleBusinesses(session: MeSession, mode: SessionMode): SessionBusiness[] {
+  if (mode === 'CUSTOMER') return []
+  const roles = MODE_ROLES[mode]
+  return session.businesses.filter((b) => b.memberships.some((m) => roles.includes(m.role)))
 }
 
 function loadCache(): WorkspaceCache {
@@ -74,7 +92,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [cache, setCache] = useState<WorkspaceCache>(loadCache)
 
-  const availableModes = session?.availableModes ?? []
+  const catalogModes = session?.availableModes ?? EMPTY_MODES
+
+  /* Modos realmente utilizáveis: um modo do catálogo que não tem nenhum
+   * business compatível (nem profile no caso de CUSTOMER) é um modo morto —
+   * resolvê-lo deixaria o usuário sem contexto e sem como sair. */
+  const availableModes = useMemo<SessionMode[]>(() => {
+    if (!session) return []
+    return catalogModes.filter((mode) => {
+      if (mode === 'CUSTOMER') return session.customerProfile !== null
+      return compatibleBusinesses(session, mode).length > 0
+    })
+  }, [session, catalogModes])
 
   // preference do contrato só é usada se válida contra o catálogo
   const prefMode = session?.preferences.activeMode ?? null
@@ -82,17 +111,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const activeMode = useMemo<SessionMode | null>(() => {
     if (!session) return null
-    if (cache.activeMode && availableModes.includes(cache.activeMode)) return cache.activeMode
-    if (prefMode && availableModes.includes(prefMode)) return prefMode
+    /* Ordem: cache local → preferência do servidor → escolha única.
+     * Cada candidato precisa ser UTILIZÁVEL (não basta estar no catálogo). */
+    const candidates = [cache.activeMode, prefMode]
+    for (const candidate of candidates) {
+      if (candidate && availableModes.includes(candidate)) return candidate
+    }
     if (availableModes.length === 1) return availableModes[0]
     return null // ambíguo → seleção explícita
   }, [session, cache.activeMode, prefMode, availableModes])
 
   const businessesForMode = useMemo<SessionBusiness[]>(() => {
     if (!session || !activeMode) return []
-    if (activeMode === 'CUSTOMER') return []
-    const roles = MODE_ROLES[activeMode]
-    return session.businesses.filter((b) => b.memberships.some((m) => roles.includes(m.role)))
+    return compatibleBusinesses(session, activeMode)
   }, [session, activeMode])
 
   const activeBusiness = useMemo<SessionBusiness | null>(() => {
@@ -137,20 +168,47 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       saveCache(next)
       return next
     })
-    void queryClient.invalidateQueries()
+    /* Invalida os dados dependentes do contexto, mas NÃO o perfil
+     * (`auth/me`), que não muda com a troca de modo/business. */
+    void queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey[0] !== 'auth',
+    })
   }
 
   /* Persistência fire-and-forget (PATCH /me/preferences): a UI nunca espera o round-trip.
    * Falha de persistência NUNCA desfaz o contexto local escolhido — o servidor revalida
-   * contra o catálogo no próximo GET /me/session (preferences stale são tratadas como hint). */
+   * contra o catálogo no próximo GET /me/session (preferences stale são tratadas como hint).
+   * A falha, porém, é MOSTRADA: o backend responde 403 quando o modo/business pedido
+   * não está no catálogo do usuário — silenciar isso deixava o usuário sem retorno. */
   const persistPreferences = (patch: { activeMode?: SessionMode | null; activeBusinessId?: string | null }) => {
-    sessionApi.updatePreferences(patch).catch(() => {
-      // intencionalmente silencioso: preferência é UX-only
+    sessionApi.updatePreferences(patch).catch((error: unknown) => {
+      const status = extractApiStatus(error)
+      const message = extractApiMessage(error)
+
+      if (status === 403) {
+        notify.error(message ?? 'Modo ou negócio indisponível para a sua conta.')
+        return
+      }
+
+      if (!status) {
+        notify.error('Sem conexão. Suas preferências não foram salvas.')
+        return
+      }
+
+      notify.error(message ?? 'Não foi possível salvar suas preferências.')
     })
   }
 
   const switchMode = (mode: SessionMode) => {
-    if (!availableModes.includes(mode)) return
+    if (!catalogModes.includes(mode)) return
+
+    /* Modo sem negócio compatível (ex.: PROFESSIONAL sem membership EMPLOYEE)
+     * não é selecionável — e não é persistido, para não gerar um 403 garantido. */
+    if (!availableModes.includes(mode)) {
+      notify.error('Este modo não está disponível para a sua conta.')
+      return
+    }
+
     // business/location só são válidos se compatíveis com o novo modo
     const roles = MODE_ROLES[mode]
     const keepBusiness =
@@ -189,6 +247,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         permissions,
         needsSelection,
         isContextReady,
+        availableModes,
         businessesForMode,
         hasPermission,
         switchMode,

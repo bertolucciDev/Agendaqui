@@ -23,11 +23,16 @@ export function isValidCpf(value: string): boolean {
 }
 
 export function isValidCnpj(value: string): boolean {
-  const d = onlyDigits(value)
-  if (d.length !== 14 || allSame(d)) return false
+  const d = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (d.length !== 14 || !/^[A-Z0-9]{12}\d{2}$/.test(d) || /^([A-Z0-9])\1{13}$/.test(d)) return false
   const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
   const w2 = [6, ...w1]
-  return dvDigit(d.slice(0, 12), w1) === Number(d[12]) && dvDigit(d.slice(0, 13), w2) === Number(d[13])
+  const cnpjDigit = (base: string, weights: number[]) => {
+    const sum = base.split('').reduce((acc, char, i) => acc + (char.charCodeAt(0) - 48) * weights[i], 0)
+    const mod = sum % 11
+    return mod < 2 ? 0 : 11 - mod
+  }
+  return cnpjDigit(d.slice(0, 12), w1) === Number(d[12]) && cnpjDigit(d.slice(0, 13), w2) === Number(d[13])
 }
 
 /* Onboarding do primeiro negócio (FE-MVP-01): curto, sem campos sem persistência no backend. */
@@ -57,14 +62,24 @@ export const firstBusinessSchema = z
 export type FirstBusinessFormData = z.infer<typeof firstBusinessSchema>
 
 export const loginSchema = z.object({  email: z.string().email('E-mail inválido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
+  password: z.string().min(1, 'Informe a senha'),
 })
+
+/**
+ * Regra de senha do backend (NestJS DTO):
+ *   @MinLength(8) + @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/)
+ * espelhada aqui para o usuário receber o erro antes do round-trip.
+ */
+export const passwordSchema = z
+  .string()
+  .min(8, 'Mínimo 8 caracteres')
+  .regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, 'A senha deve conter letras e números')
 
 export const registerSchema = z.object({
   name: z.string().min(2, 'Mínimo 2 caracteres'),
   email: z.string().email('E-mail inválido'),
   phone: z.string().optional(),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  password: passwordSchema,
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Senhas não conferem',
@@ -73,7 +88,7 @@ export const registerSchema = z.object({
 
 export const businessSchema = z.object({
   name: z.string().min(2, 'Mínimo 2 caracteres'),
-  document: z.string().min(11, 'CPF/CNPJ inválido'),
+  document: z.string().min(1, 'Informe o documento'),
   type: z.enum(['COMPANY', 'INDIVIDUAL']),
   categoryId: z.string().min(1, 'Selecione uma categoria'),
   description: z.string().optional(),
@@ -88,6 +103,17 @@ export const businessSchema = z.object({
   cep: z.string().length(9, 'CEP inválido'),
   timezone: z.string(),
   attendanceType: z.enum(['AT_LOCATION', 'AT_CUSTOMER', 'BOTH']),
+}).superRefine((data, ctx) => {
+  const valid = data.type === 'COMPANY'
+    ? isValidCnpj(data.document)
+    : isValidCpf(data.document)
+  if (!valid) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['document'],
+      message: data.type === 'COMPANY' ? 'CNPJ inválido' : 'CPF inválido',
+    })
+  }
 })
 
 export const locationSchema = z.object({
@@ -106,9 +132,10 @@ export const locationSchema = z.object({
 export const serviceSchema = z.object({
   name: z.string().min(2, 'Mínimo 2 caracteres'),
   categoryId: z.string().min(1, 'Selecione uma categoria'),
-  priceCents: z.number().min(0, 'Preço inválido'),
+  /** Preço em REAIS — a conversão para centavos acontece na submissão. */
+  price: z.number().min(0.01, 'Informe um preço válido'),
   durationMinutes: z.number().min(15, 'Mínimo 15 minutos'),
-  bufferMinutes: z.number().optional(),
+  bufferMinutes: z.number().min(0, 'Intervalo inválido').optional(),
   description: z.string().optional(),
 })
 
@@ -125,8 +152,6 @@ export const appointmentSchema = z.object({
   employeeMembershipId: z.string().optional(),
   date: z.string().min(1, 'Data obrigatória'),
   time: z.string().min(1, 'Horário obrigatório'),
-  clientName: z.string().optional(),
-  clientPhone: z.string().optional(),
 })
 
 export const forgotPasswordSchema = z.object({
@@ -134,8 +159,19 @@ export const forgotPasswordSchema = z.object({
 })
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(6, 'Mínimo 6 caracteres'),
-  newPassword: z.string().min(6, 'Mínimo 6 caracteres'),
+  currentPassword: z.string().min(1, 'Informe a senha atual'),
+  newPassword: passwordSchema,
+  confirmPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: 'Senhas não conferem',
+  path: ['confirmPassword'],
+})
+
+/** POST /auth/reset-password — e-mail + código de 6 caracteres + nova senha. */
+export const resetPasswordSchema = z.object({
+  email: z.string().email('E-mail inválido'),
+  code: z.string().length(6, 'Informe o código de 6 caracteres'),
+  newPassword: passwordSchema,
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: 'Senhas não conferem',
@@ -151,3 +187,4 @@ export type StaffFormData = z.infer<typeof staffSchema>
 export type AppointmentFormData = z.infer<typeof appointmentSchema>
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>
+export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>

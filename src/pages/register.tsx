@@ -5,10 +5,11 @@ import { Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { registerSchema, type RegisterFormData } from '@/lib/validations'
+import { extractApiMessage, extractApiStatus } from '@/lib/api-error'
 import { maskPhone } from '@/lib/masks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 
 export default function RegisterPage() {
   const { register: registerUser } = useAuth()
@@ -24,20 +25,28 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterFormData) => {
     setIsSubmitting(true)
     try {
+      /* POST /users devolve { userId, autoVerified } — NÃO devolve o usuário.
+       * autoVerified=false ⇒ a conta ficou PENDING_VERIFICATION e precisa do
+       * código de verificação antes do primeiro acesso. */
       const { autoVerified } = await registerUser(data.name, data.email, data.password, data.phone)
       if (autoVerified) {
         // A2: conta pendente re-registrada com a mesma senha — já está verificada.
-        toast.success('E-mail confirmado! Faça login.')
+        notify.success('E-mail confirmado! Faça login.')
         navigate('/login')
         return
       }
-      toast.success('Conta criada! Verifique seu e-mail.')
+      notify.success('Conta criada! Verifique seu e-mail.')
       navigate(`/verify-email?email=${encodeURIComponent(data.email)}`)
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
-        toast.error('E-mail já cadastrado')
+    } catch (err: unknown) {
+      const status = extractApiStatus(err)
+      const message = extractApiMessage(err)
+
+      if (status === 409) {
+        notify.error(message ?? 'E-mail já cadastrado')
+      } else if (status === 400 && message) {
+        notify.error(message)
       } else {
-        toast.error('Erro ao criar conta')
+        notify.error(message ?? 'Erro ao criar conta')
       }
     } finally {
       setIsSubmitting(false)

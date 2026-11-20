@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
+import { useLocation } from 'react-router-dom'
 import { AuthProvider } from './auth'
 import { SessionProvider } from './session'
 import { WorkspaceProvider } from './workspace'
 import { ThemeProvider } from './theme'
 import { ErrorBoundary } from '@/components/shared/error-boundary'
+import { AppToaster } from '@/components/feedback/toaster'
 import type { ReactNode } from 'react'
+import { useAuth } from './auth'
+import { SupportWidget } from '@/components/support/support-widget'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +31,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
                 <WorkspaceProvider>
                   <BrowserRouter>
                     {children}
-                    <Toaster position="top-right" />
+                    <SupportLauncher />
+                    <AppToaster />
                   </BrowserRouter>
                 </WorkspaceProvider>
               </SessionProvider>
@@ -37,4 +41,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
         </ThemeProvider>
       </ErrorBoundary>
   )
+}
+
+function SupportLauncher() {
+  const { isAuthenticated } = useAuth()
+  const location = useLocation()
+  if (!isAuthenticated || location.pathname.startsWith('/help') || location.pathname.startsWith('/support')) return null
+
+  return <SupportWidget />
 }

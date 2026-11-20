@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './auth'
 import { sessionApi } from '@/services/api/session'
 import type { MeSession } from '@/types/session'
+import { extractApiStatus } from '@/lib/api-error'
 
 /**
  * SessionProvider — camada de descoberta pós-login (CONTRACT FREEZE: GET /me/session).
@@ -12,6 +13,8 @@ import type { MeSession } from '@/types/session'
 interface SessionContextType {
   session: MeSession | null
   isSessionLoading: boolean
+  sessionError: Error | null
+  retrySession: () => void
   refreshSession: () => void
 }
 
@@ -21,18 +24,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const queryClient = useQueryClient()
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['session'],
     queryFn: sessionApi.getSession,
     enabled: isAuthenticated && !isAuthLoading,
     staleTime: 60_000,
+    retry: (failureCount, queryError) =>
+      extractApiStatus(queryError) !== 429 && failureCount < 1,
   })
 
   return (
     <SessionContext.Provider
       value={{
         session: isAuthenticated ? (data ?? null) : null,
-        isSessionLoading: isAuthenticated ? isLoading || isFetching : false,
+        isSessionLoading: isAuthenticated ? isLoading : false,
+        sessionError: (error as Error | null) ?? null,
+        retrySession: () => {
+          void refetch()
+        },
         refreshSession: () => {
           void queryClient.invalidateQueries({ queryKey: ['session'] })
         },

@@ -8,13 +8,12 @@ import { useActiveBusiness } from '@/app/hooks/use-active-business'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { appointmentSchema, type AppointmentFormData } from '@/lib/validations'
-import toast from 'react-hot-toast'
-import { ArrowLeft, CalendarPlus } from 'lucide-react'
+import { notify } from '@/lib/notify'
+import { ArrowLeft, CalendarPlus, Info } from 'lucide-react'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 
 export default function NewAppointmentPage() {
   const navigate = useNavigate()
@@ -48,30 +47,33 @@ export default function NewAppointmentPage() {
     mutationFn: (data: AppointmentFormData) => {
       const service = services.find((s) => s.id === data.serviceId)
       const startsAt = new Date(`${data.date}T${data.time}:00`).toISOString()
-      const endsAt = new Date(
-        new Date(startsAt).getTime() + (service?.durationMinutes ?? 30) * 60000
-      ).toISOString()
+      /* O slot gerado pelo backend tem duração `durationMinutes + bufferMinutes`.
+       * Sem o buffer o `endsAt` não casa com nenhum slot e o agendamento é
+       * rejeitado com "profissional não disponível". */
+      const slotMinutes = (service?.durationMinutes ?? 30) + (service?.bufferMinutes ?? 0)
+      const endsAt = new Date(new Date(startsAt).getTime() + slotMinutes * 60000).toISOString()
+
       return appointmentsApi.create(businessId!, {
         locationId: data.locationId,
         serviceId: data.serviceId,
         startsAt,
         endsAt,
         employeeMembershipId: data.employeeMembershipId || undefined,
-        clientName: data.clientName,
-        clientPhone: data.clientPhone,
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] })
-      toast.success('Agendamento criado!')
+      void queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      void queryClient.invalidateQueries({ queryKey: ['appointments-today'] })
+      notify.success('Agendamento criado!')
       navigate('/appointments')
     },
-    onError: () => toast.error('Erro ao criar agendamento'),
+    onError: (err: unknown) =>
+      notify.error(err, { retry: () => createMutation.mutate() }),
   })
 
   const onSubmit = (data: AppointmentFormData) => {
     if (!businessId) {
-      toast.error('Cadastre um negócio primeiro')
+      notify.warning('Cadastre um negócio primeiro')
       return
     }
     createMutation.mutate(data)
@@ -99,47 +101,72 @@ export default function NewAppointmentPage() {
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div>
-                  <label className="label" htmlFor="appointment-location">Local</label>
+                  <label className="label" htmlFor="appointment-location">
+                    Local
+                  </label>
                   <select
                     id="appointment-location"
-                    className={cn('input mt-1.5', errors.locationId && 'border-red-400')}
+                    className="input mt-1.5"
+                    aria-invalid={errors.locationId ? true : undefined}
                     {...register('locationId')}
                   >
                     <option value="">Selecione...</option>
                     {locations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>{loc.name}</option>
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </option>
                     ))}
                   </select>
-                  {errors.locationId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.locationId.message}</p>}
+                  {errors.locationId && (
+                    <p className="mt-1 text-xs text-destructive-soft-fg" role="alert">
+                      {errors.locationId.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="label" htmlFor="appointment-service">Serviço *</label>
+                  <label className="label" htmlFor="appointment-service">
+                    Serviço *
+                  </label>
                   <select
                     id="appointment-service"
-                    className={cn('input mt-1.5', errors.serviceId && 'border-red-400')}
+                    className="input mt-1.5"
+                    aria-invalid={errors.serviceId ? true : undefined}
                     {...register('serviceId')}
                   >
                     <option value="">Selecione...</option>
                     {services.map((svc) => (
-                      <option key={svc.id} value={svc.id}>{svc.name}</option>
+                      <option key={svc.id} value={svc.id}>
+                        {svc.name}
+                      </option>
                     ))}
                   </select>
-                  {errors.serviceId && <p className="mt-1 text-xs text-destructive-soft-fg">{errors.serviceId.message}</p>}
+                  {errors.serviceId && (
+                    <p className="mt-1 text-xs text-destructive-soft-fg" role="alert">
+                      {errors.serviceId.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="label" htmlFor="appointment-staff">Profissional</label>
+                  <label className="label" htmlFor="appointment-staff">
+                    Profissional
+                  </label>
                   <select
                     id="appointment-staff"
-                    className={cn('input mt-1.5', errors.employeeMembershipId && 'border-red-400')}
+                    className="input mt-1.5"
                     {...register('employeeMembershipId')}
                   >
                     <option value="">Qualquer disponível</option>
                     {staff.map((m) => (
-                      <option key={m.id} value={m.id}>{m.user?.name ?? m.position}</option>
+                      <option key={m.id} value={m.id}>
+                        {m.user?.name ?? m.position}
+                      </option>
                     ))}
                   </select>
+                  <p className="helper-text">
+                    Sem profissional, o servidor escolhe o primeiro disponível para o horário.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -157,19 +184,14 @@ export default function NewAppointmentPage() {
                   />
                 </div>
 
-                <Input
-                  label="Cliente"
-                  placeholder="Nome do cliente"
-                  error={errors.clientName?.message}
-                  {...register('clientName')}
-                />
-
-                <Input
-                  label="Telefone do cliente"
-                  placeholder="(11) 99999-0000"
-                  error={errors.clientPhone?.message}
-                  {...register('clientPhone')}
-                />
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-muted p-3">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <p className="text-xs text-muted-foreground">
+                    O agendamento fica vinculado à sua conta. Para registrar um cliente
+                    específico, envie o link público de agendamento para que ele mesmo
+                    reserve o horário.
+                  </p>
+                </div>
 
                 <Button
                   type="submit"

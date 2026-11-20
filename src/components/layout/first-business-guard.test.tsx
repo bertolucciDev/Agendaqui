@@ -82,4 +82,10 @@ describe('FirstBusinessGuard', () => {
     mount({ session: baseSession([]), isSessionLoading: false }, '/onboarding/business')
     expect(screen.getByTestId('path').textContent).toBe('/onboarding/business')
   })
+
+  it('5. super_admin (isPlatformAdmin=true, businesses=[]) → redireciona para o painel admin', () => {
+    const session = { ...baseSession([]), isPlatformAdmin: true }
+    mount({ session, isSessionLoading: false }, '/onboarding/business')
+    expect(screen.getByTestId('path').textContent).toBe('/admin')
+  })
 })

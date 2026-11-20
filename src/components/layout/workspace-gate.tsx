@@ -17,16 +17,41 @@ const MODE_LABELS: Record<SessionMode, { title: string; desc: string }> = {
  * A escolha alimenta cache/preferences; troca posterior não exige logout.
  */
 export function WorkspaceGate({ children }: { children: React.ReactNode }) {
-  const { session, isSessionLoading } = useSession()
-  const { activeMode, businessesForMode, needsSelection, switchMode, switchBusiness } = useWorkspace()
+  const { session, isSessionLoading, sessionError, retrySession } = useSession()
+  const {
+    activeMode,
+    availableModes,
+    businessesForMode,
+    needsSelection,
+    switchMode,
+    switchBusiness,
+  } = useWorkspace()
   const [pickedMode, setPickedMode] = useState<SessionMode | null>(null)
   const location = useLocation()
 
   if (isSessionLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
+    )
+  }
+
+  if (!session && sessionError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <Card className="w-full max-w-md">
+          <CardContent className="space-y-4 py-6 text-center">
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Não foi possível carregar sua sessão</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                O acesso foi temporariamente limitado. Aguarde um pouco e tente novamente.
+              </p>
+            </div>
+            <Button type="button" onClick={retrySession}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      </main>
     )
   }
 
@@ -35,10 +60,16 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
   // o D8 nunca escreveria a preferência e o picker nunca resolveria sozinho.
   if (location.pathname.startsWith('/onboarding')) return <>{children}</>
 
+  // Platform admins não têm businesses/memberships no modelo de negócio,
+  // então availableModes sempre será vazio para eles. Passam direto.
+  if (session?.isPlatformAdmin) return <>{children}</>
+
   if (!session || !needsSelection) return <>{children}</>
 
-  // MVP administrativo: CUSTOMER permanece no contrato, mas fora da superfície do MVP.
-  const modes = session.availableModes.filter((m) => m !== 'CUSTOMER')
+  /* MVP administrativo: CUSTOMER permanece no contrato, mas fora da superfície do MVP.
+   * Usamos os modos JÁ filtrados pelo provider (catálogo ∩ negócio compatível):
+   * oferecer um modo sem negócio compatível deixaria o usuário sem saída. */
+  const modes = availableModes.filter((m) => m !== 'CUSTOMER')
   const effectiveMode = activeMode ?? pickedMode
 
   return (

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Building2, User, Loader2 } from 'lucide-react'
+import { ArrowLeft, Building2, User, Loader2 } from 'lucide-react'
 import { categoriesApi } from '@/services/api/categories'
 import { useSession } from '@/app/providers/session'
 import {
@@ -12,7 +12,8 @@ import {
   verificationPermissions,
 } from '@/hooks/use-business-verification-flow'
 import { useBusinessVerification } from '@/hooks/use-business-verification'
-import { maskCpfCnpj, maskPhone, unmask } from '@/lib/masks'
+import { maskCpf, maskCnpj, maskPhone, unmask, unmaskCnpj } from '@/lib/masks'
+import { isValidCpf, isValidCnpj } from '@/lib/validations'
 import { canEdit, isEmpty } from '@/lib/verification/permissions'
 import {
   DOCUMENT_HINTS,
@@ -58,21 +59,17 @@ const formSchema = z
     categoryId: z.string().min(1, 'Selecione uma categoria'),
     legalName: z.string().optional(),
     responsibleName: z.string().optional(),
-    // O backend exige CPF do responsável para COMPANY (deriveResponsibleCpf em
-    // create/update); para INDIVIDUAL ele é derivado do próprio documento.
-    responsibleCpf: z.string().optional(),
     phone: z
       .string()
       .optional()
       .refine((v) => !v || unmask(v).length >= 10, 'Telefone inválido'),
   })
   .superRefine((values, ctx) => {
-    if (values.businessType === 'COMPANY' && unmask(values.responsibleCpf ?? '').length !== 11) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['responsibleCpf'],
-        message: 'Informe o CPF do responsável (11 dígitos)',
-      })
+    if (values.businessType === 'COMPANY' && !isValidCnpj(values.document)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['document'], message: 'CNPJ inválido' })
+    }
+    if (values.businessType === 'INDIVIDUAL' && !isValidCpf(values.document)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['document'], message: 'CPF inválido' })
     }
   })
 
@@ -88,7 +85,9 @@ const UPLOAD_COPY: Record<DocumentUploadPhase, string> = {
 }
 
 export default function OnboardingBusinessPage() {
+  const location = useLocation()
   const navigate = useNavigate()
+  const isNewBusinessRequest = location.pathname === '/onboarding/business/new'
   const queryClient = useQueryClient()
   const { refreshSession } = useSession()
   const flow = useBusinessVerificationFlow()
@@ -96,7 +95,6 @@ export default function OnboardingBusinessPage() {
   const [step, setStep] = useState<'type' | 'form'>('type')
   const [documentDisplay, setDocumentDisplay] = useState('')
   const [phoneDisplay, setPhoneDisplay] = useState('')
-  const [responsibleCpfDisplay, setResponsibleCpfDisplay] = useState('')
   const hydratedFor = useRef<string | null>(null)
 
   const { data: categories = [] } = useQuery({
@@ -120,7 +118,6 @@ export default function OnboardingBusinessPage() {
       categoryId: '',
       legalName: '',
       responsibleName: '',
-      responsibleCpf: '',
       phone: '',
     },
   })
@@ -133,7 +130,15 @@ export default function OnboardingBusinessPage() {
   // (`verificationId: null`) quando não existe solicitação. Isso NÃO é uma
   // verificação: tratar como tal faria a tela tentar PATCH em um DRAFT
   // inexistente em vez de criar um novo.
-  const verification = isEmpty(rawVerification) ? null : rawVerification
+  const currentVerification = isEmpty(rawVerification) ? null : rawVerification
+  // A rota de novo negocio inicia outro pedido quando o anterior ja foi encerrado.
+  // Solicitações DRAFT/PENDING continuam sendo retomadas pelo fluxo existente.
+  const verification =
+    isNewBusinessRequest &&
+    currentVerification?.status !== 'DRAFT' &&
+    currentVerification?.status !== 'PENDING'
+      ? null
+      : currentVerification
 
   const selectedType = watch('businessType')
   // Verificação existente manda no tipo; senão vale a escolha da tela.
@@ -154,10 +159,12 @@ export default function OnboardingBusinessPage() {
     setValue('categoryId', verification.categoryId ?? '')
     setValue('legalName', verification.legalName ?? '')
     setValue('responsibleName', verification.responsibleName ?? '')
-    setValue('responsibleCpf', verification.responsibleCpf ?? '')
     setValue('phone', verification.phone ?? '')
-    setDocumentDisplay(maskCpfCnpj(verification.document ?? ''))
-    setResponsibleCpfDisplay(maskCpfCnpj(verification.responsibleCpf ?? ''))
+    setDocumentDisplay(
+      verification.businessType === 'COMPANY'
+        ? maskCnpj(verification.document ?? '')
+        : maskCpf(verification.document ?? ''),
+    )
     setPhoneDisplay(maskPhone(verification.phone ?? ''))
     if (verification.businessType) setStep('form')
   }, [setValue, verification])
@@ -166,12 +173,19 @@ export default function OnboardingBusinessPage() {
   // garantimos a sessão fresca e seguimos ao dashboard. A rota de
   // acompanhamento é quem mostra o estado intermediário.
   useEffect(() => {
+    if (isNewBusinessRequest) return
     if (status !== 'APPROVED') return
     void refetch()
     refreshSession()
     void queryClient.invalidateQueries({ queryKey: ['session'] })
     navigate('/dashboard', { replace: true })
-  }, [navigate, queryClient, refreshSession, refetch, status])
+  }, [isNewBusinessRequest, navigate, queryClient, refreshSession, refetch, status])
+
+  // Nao permite um segundo pedido enquanto ainda ha um rascunho aberto.
+  useEffect(() => {
+    if (!isNewBusinessRequest || verification?.status !== 'DRAFT') return
+    navigate('/onboarding/business', { replace: true })
+  }, [isNewBusinessRequest, navigate, verification?.status])
 
   // PENDING/REJECTED são estados de ESPERA/ENCERRADO: nada a editar no titular
   // (replay backend: write-paths só aceitam DRAFT; REJECTED reabre via admin
@@ -213,14 +227,11 @@ export default function OnboardingBusinessPage() {
     const payload: CreateVerificationPayload = {
       businessType: values.businessType,
       // DTO exige dígitos crus; a máscara é só apresentação.
-      document: unmask(values.document),
+      document: values.businessType === 'COMPANY' ? unmaskCnpj(values.document) : unmask(values.document),
       tradeName: values.tradeName.trim(),
       categoryId: values.categoryId,
       ...(values.legalName ? { legalName: values.legalName.trim() } : {}),
       ...(values.responsibleName ? { responsibleName: values.responsibleName.trim() } : {}),
-      ...(values.businessType === 'COMPANY'
-        ? { responsibleCpf: unmask(values.responsibleCpf ?? '') }
-        : {}),
       ...(values.phone ? { phone: unmask(values.phone) } : {}),
     }
 
@@ -232,6 +243,16 @@ export default function OnboardingBusinessPage() {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 bg-background px-4 py-10">
+      {isNewBusinessRequest ? (
+        <Link
+          to="/dashboard"
+          aria-label="Voltar ao dashboard"
+          title="Voltar ao dashboard"
+          className="fixed left-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </Link>
+      ) : null}
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Verificação do negócio</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -309,7 +330,9 @@ export default function OnboardingBusinessPage() {
                   placeholder={businessType === 'COMPANY' ? '00.000.000/0000-00' : '000.000.000-00'}
                   value={documentDisplay}
                   onChange={(e) => {
-                    const masked = maskCpfCnpj(e.target.value)
+                    const masked = businessType === 'COMPANY'
+                      ? maskCnpj(e.target.value)
+                      : maskCpf(e.target.value)
                     setDocumentDisplay(masked)
                     setValue('document', masked, { shouldValidate: true })
                   }}
@@ -330,31 +353,10 @@ export default function OnboardingBusinessPage() {
 
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor="responsibleName">
-                  Responsável
+                  Nome da pessoa de contato
                 </label>
-                <Input id="responsibleName" placeholder="Nome de quem responde" {...register('responsibleName')} />
+                <Input id="responsibleName" placeholder="Nome para contato sobre esta solicitação" {...register('responsibleName')} />
               </div>
-
-              {businessType === 'COMPANY' ? (
-                <div>
-                  <label className="text-sm font-medium text-foreground" htmlFor="responsibleCpf">
-                    CPF do responsável
-                  </label>
-                  <Input
-                    id="responsibleCpf"
-                    placeholder="000.000.000-00"
-                    value={responsibleCpfDisplay}
-                    onChange={(e) => {
-                      const masked = maskCpfCnpj(e.target.value)
-                      setResponsibleCpfDisplay(masked)
-                      setValue('responsibleCpf', masked, { shouldValidate: true })
-                    }}
-                  />
-                  {errors.responsibleCpf ? (
-                    <p className="mt-1 text-xs text-destructive">{errors.responsibleCpf.message}</p>
-                  ) : null}
-                </div>
-              ) : null}
 
               <div>
                 <label className="text-sm font-medium text-foreground" htmlFor="phone">

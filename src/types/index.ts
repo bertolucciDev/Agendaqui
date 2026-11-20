@@ -4,14 +4,16 @@ export type MembershipRole = 'OWNER' | 'MANAGER' | 'EMPLOYEE'
 export type MembershipInviteRole = 'MANAGER' | 'EMPLOYEE'
 export type DayOfWeek = 'SUNDAY' | 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY'
 export type TimeOffType = 'VACATION' | 'SICK_LEAVE' | 'ABSENCE'
+export type TimeOffRequestType = 'VACATION' | 'ABSENCE'
 export type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW'
 
 export interface User {
   id: string
   name: string
   email: string
-  phone?: string
-  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED'
+  phone?: string | null
+  /** Espelha o enum UserStatus do backend: PENDING_VERIFICATION | ACTIVE | BLOCKED. */
+  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'BLOCKED'
   emailVerifiedAt: string | null
   createdAt: string
 }
@@ -21,8 +23,13 @@ export interface AuthTokens {
   refreshToken: string
 }
 
+/**
+ * POST /auth/login devolve APENAS os tokens — o usuário NÃO vem na resposta.
+ * O perfil é obtido em seguida por GET /auth/me.
+ * `user` existe só no mock local (login simulado) e, por isso, é opcional.
+ */
 export interface LoginResponse extends AuthTokens {
-  user: User
+  user?: User
 }
 
 export interface Category {
@@ -92,18 +99,59 @@ export interface Service {
   bufferMinutes?: number
   description?: string
   active: boolean
+  /**
+   * Legado do mock: o backend real NÃO devolve este campo em
+   * `GET /businesses/:slug/services`. A fonte de verdade do vínculo
+   * profissional↔serviço é `GET /businesses/:slug/professionals`.
+   */
   membershipIds?: string[]
 }
 
+/**
+ * Usuário embutido na resposta de membership (`Membership.user`).
+ *
+ * A listagem de equipe (`GET /businesses/:id/employees`) devolve
+ * `{ id, name, email }` — os demais campos do perfil só existem em
+ * `GET /auth/me`, então aqui são opcionais.
+ */
+export interface MembershipUser {
+  id: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  status?: string
+  emailVerifiedAt?: string | null
+  createdAt?: string
+}
+
+/**
+ * Vínculo de um usuário com um local do negócio.
+ * `membershipId` é devolvido pelas mutações (create/update) junto de `id`.
+ */
 export interface Membership {
   id: string
+  membershipId?: string
   userId: string
   locationId: string
   role: MembershipRole
   position: string
   active: boolean
-  user?: User
+  user?: MembershipUser
   workingHours?: WorkingHoursEntry[]
+}
+
+/**
+ * Profissional público do negócio (`GET /businesses/:slug/professionals`).
+ * `id` é o id do membership e `services` lista os serviços vinculados.
+ */
+export interface BusinessProfessional {
+  id: string
+  userId: string
+  name: string
+  position: string
+  role: MembershipRole
+  active: boolean
+  services: { serviceId: string }[]
 }
 
 export interface WorkingHoursEntry {
@@ -112,6 +160,8 @@ export interface WorkingHoursEntry {
   endMinute: number
 }
 
+export type TimeOffStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED'
+
 export interface TimeOff {
   id: string
   employeeMembershipId: string
@@ -119,25 +169,41 @@ export interface TimeOff {
   startAt: string
   endAt: string
   reason?: string
-  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  status: TimeOffStatus
 }
 
+/** Payload de `POST /employees/{id}/time-offs`. */
+export interface TimeOffRequestResult {
+  timeOffId: string
+}
+
+/** Payload de `POST /businesses/{id}/invites`. */
+export interface MembershipInviteResult {
+  inviteId: string
+}
+
+/**
+ * Agendamento — contrato congelado com o backend (`AppointmentResponse`).
+ * Um nome por conceito, e o nome é o do domínio: `customerUserId` (id do
+ * `User` do cliente), `employeeMembershipId` (id do vínculo profissional↔local),
+ * `cancellationReason` e as relações `customer` / `employeeMembership`.
+ */
 export interface Appointment {
   id: string
   businessId: string
   locationId: string
   serviceId: string
-  clientId: string
+  customerUserId: string
   employeeMembershipId?: string
   startsAt: string
   endsAt: string
   status: AppointmentStatus
   priceCents?: number
-  cancelReason?: string
+  cancellationReason?: string
   service?: Service
   location?: Location
-  employee?: Membership
-  client?: Pick<User, 'id' | 'name' | 'email' | 'phone'>
+  employeeMembership?: Membership
+  customer?: Pick<User, 'id' | 'name' | 'email' | 'phone'>
 }
 
 export interface AvailableSlot {
@@ -146,17 +212,25 @@ export interface AvailableSlot {
   employeeMembershipId?: string
 }
 
+/**
+ * GET /me/customer-profile — o backend devolve `userId` + `reputation` + `strikeCount`.
+ * O modelo `CustomerProfile` tem PK `userId` (não existe coluna `id`), então o
+ * identificador do perfil é o próprio `userId`.
+ */
 export interface CustomerProfile {
-  id: string
   userId: string
   reputation: number
-  strikes: number
+  strikeCount: number
 }
 
+/**
+ * GET /me/admin-profile — o backend devolve `userId` + `level` (enum AdminLevel).
+ * O modelo `AdminProfile` tem PK `userId` (não existe coluna `id`), então o
+ * identificador do perfil é o próprio `userId`.
+ */
 export interface AdminProfile {
-  id: string
   userId: string
-  role: string
+  level: 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT'
 }
 
 export interface PlatformConfig {

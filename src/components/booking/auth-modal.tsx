@@ -3,7 +3,7 @@ import { X, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/app/providers/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import toast from 'react-hot-toast'
+import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
 
 interface AuthModalProps {
@@ -34,28 +34,28 @@ export function AuthModal({ open, onClose, onAuthenticated }: AuthModalProps) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!email.trim() || !password) {
-      toast.error(mode === 'login' ? 'Informe e-mail e senha' : 'Preencha todos os campos')
+      notify.error(mode === 'login' ? 'Informe e-mail e senha' : 'Preencha todos os campos')
       return
     }
     if (mode === 'register' && !name.trim()) {
-      toast.error('Informe seu nome')
+      notify.error('Informe seu nome')
       return
     }
     setLoading(true)
     try {
       if (mode === 'register') {
         await register(name.trim(), email.trim(), password)
-        toast.success('Conta criada! Agora faça login para continuar.')
+        notify.success('Conta criada! Agora faça login para continuar.')
         setMode('login')
         setPassword('')
       } else {
         await login(email.trim(), password)
-        toast.success('Login realizado!')
+        notify.success('Login realizado!')
         onAuthenticated()
       }
     } catch (err: any) {
       const msg = err?.response?.data?.message
-      toast.error(msg || 'Erro. Tente novamente.')
+      notify.error(msg || 'Erro. Tente novamente.')
     } finally {
       setLoading(false)
     }

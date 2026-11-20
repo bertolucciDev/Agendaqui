@@ -1,15 +1,17 @@
 import { Link, useLocation, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Building2, MapPin, Scissors, Users, CalendarDays, Settings, LogOut, Search, Menu, X, ChevronDown, Plus, CheckCircle2 } from 'lucide-react'
+import { LayoutDashboard, Building2, MapPin, Scissors, Users, CalendarDays, Settings, LogOut, Menu, X, ChevronDown, Plus, CheckCircle2, LifeBuoy } from 'lucide-react'
 import { useAuth } from '@/app/providers/auth'
 import { useSession } from '@/app/providers/session'
 import { useWorkspace } from '@/app/providers/workspace'
 import { useActiveBusiness } from '@/app/hooks/use-active-business'
 import { locationsApi } from '@/services/api/locations'
 import { ThemeSwitch } from '@/components/ui/theme-switch'
+import { GlobalSearch } from '@/components/layout/global-search'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import type { SessionMode } from '@/types/session'
+import { usePendingBusinessVerification } from '@/hooks/use-business-verification'
 
 const MODE_SHORT: Record<SessionMode, string> = { OWNER: 'Gestão', PROFESSIONAL: 'Profissional', CUSTOMER: 'Cliente' }
 
@@ -87,6 +89,7 @@ function BusinessSwitcher() {
   // Somente businesses compatíveis com o modo ativo (contrato /me/session); troca sem logout.
   const businesses = businessesForMode
   const business = activeBusiness
+  const pendingVerification = usePendingBusinessVerification()
 
   const switchTo = (id: string) => {
     switchBusiness(id)
@@ -146,6 +149,22 @@ function BusinessSwitcher() {
               </button>
             ))
           )}
+          {pendingVerification ? (
+            <button
+              type="button"
+              disabled
+              aria-label={`${pendingVerification.tradeName ?? 'Novo negócio'}, pendente de aprovação`}
+              className="flex w-full cursor-not-allowed items-center gap-2 px-3 py-2 text-xs opacity-50"
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              <span className="flex-1 truncate text-left">
+                {pendingVerification.tradeName ?? 'Novo negócio'}
+              </span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Pendente
+              </span>
+            </button>
+          ) : null}
         </div>
       )}
     </div>
@@ -164,6 +183,7 @@ function DashboardLayoutInner() {
     { to: '/services', label: 'Serviços', icon: Scissors },
     { to: '/staff', label: 'Equipe', icon: Users },
     { to: '/appointments', label: 'Agendamentos', icon: CalendarDays },
+    { to: '/help', label: 'Ajuda e suporte', icon: LifeBuoy },
   ]
 
   return (
@@ -202,15 +222,8 @@ function DashboardLayoutInner() {
             </button>
         </div>
 
-        {/* Search */}
-        <div className="relative mx-3 mt-3">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            className="w-full rounded-lg border border-border bg-muted py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
-          />
-        </div>
+        {/* Busca global (⌘K) */}
+        <GlobalSearch />
 
         {/* Active business */}
         <ModeSwitcher />
@@ -230,9 +243,9 @@ function DashboardLayoutInner() {
                 onClick={() => setSidebarOpen(false)}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 border-l-2 border-transparent',
                   isActive
-                    ? 'bg-primary-soft text-primary-soft-fg font-semibold'
+                    ? 'bg-primary-soft text-primary-soft-fg font-semibold border-l-primary-accent'
                     : 'text-muted-foreground hover:bg-primary-soft hover:text-primary-soft-fg'
                 )}
               >
