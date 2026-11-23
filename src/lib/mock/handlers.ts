@@ -245,6 +245,10 @@ export function handleRequest(
       return ok(buildMeSession(db, user.id))
     }
 
+  if (segs[0] === 'me' && segs[1] === 'pos') {
+    return handleMePos(method, segs, query, body)
+  }
+
     /* -------- CONTRACT FREEZE: PATCH /me/preferences (semântica = backend, pós P2-A/B) --------
      * undefined → preservar · valor válido → atualizar · null → limpar.
      * 400: payload inválido/enum inválido/campo desconhecido (ValidationPipe).
@@ -413,6 +417,54 @@ export function handleRequest(
         query.get('limit') ?? undefined,
         query.get('offset') ?? undefined
       )
+    }
+    if (segs[1] === 'agenda' && method === 'get') {
+      const businessId = query.get('businessId')
+      const userId = currentUser()?.id
+      if (!businessId || !userId) throw new ApiError(400, 'businessId é obrigatório')
+
+      const membershipIds = new Set(
+        db.memberships
+          .filter(
+            (membership) =>
+              membership.userId === userId &&
+              membership.businessId === businessId &&
+              membership.role === 'EMPLOYEE' &&
+              membership.active
+          )
+          .map((membership) => membership.id)
+      )
+      if (membershipIds.size === 0) throw new ApiError(403, 'Acesso negado')
+
+      const dateFrom = query.get('dateFrom')
+      const dateTo = query.get('dateTo')
+      if (!dateFrom || !dateTo) throw new ApiError(400, 'dateFrom e dateTo são obrigatórios')
+      const from = new Date(dateFrom).getTime()
+      const to = new Date(dateTo).getTime()
+      if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
+        throw new ApiError(400, 'Intervalo de datas inválido')
+      }
+
+      const limit = Math.min(Math.max(Number(query.get('limit')) || 100, 1), 100)
+      const appointments = db.appointments
+        .filter((appointment) => {
+          const startsAt = new Date(appointment.startsAt).getTime()
+          return (
+            appointment.businessId === businessId &&
+            !!appointment.employeeMembershipId &&
+            membershipIds.has(appointment.employeeMembershipId) &&
+            startsAt >= from &&
+            startsAt <= to
+          )
+        })
+        .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+        .slice(0, limit)
+        .map((appointment) => ({
+          ...serializeAppointment(appointment),
+          location: db.locations.find((location) => location.id === appointment.locationId) ?? null,
+        }))
+
+      return ok(appointments)
     }
     if (segs[1] === 'customer-profile') {
       /* Contrato congelado: o `CustomerProfile` tem PK `userId` (não existe
@@ -959,6 +1011,103 @@ function handleAuth(method: Method, segs: string[], body: any): MockResponse {
 }
 
 /* ------------------------------------------------ */
+function requireMockBusinessOwner(businessId: string) {
+  const db = getDb()
+  const user = currentUser()
+  if (!user) throw new ApiError(401, 'Unauthorized')
+  const business = db.businesses.find((item) => item.id === businessId)
+  if (!business) throw new ApiError(404, 'Negócio não encontrado.')
+  if (business.ownerUserId !== user.id) throw new ApiError(403, 'Acesso negado.')
+  return user
+}
+
+function handleMePos(method: Method, segs: string[], query: URLSearchParams, body: any): MockResponse {
+  const db = getDb()
+  const user = currentUser()
+  if (!user) throw new ApiError(401, 'Unauthorized')
+
+  if (segs[2] === 'catalog' && method === 'get') {
+    const businessId = query.get('businessId')
+    const locationId = query.get('locationId')
+    const business = db.businesses.find((item) => item.id === businessId && item.sellsProducts && item.status === 'ACTIVE')
+    if (!business) throw new ApiError(403, 'O PDV não está ativo para este negócio.')
+    const location = db.locations.find((item) => item.id === locationId && item.businessId === business.id && item.status === 'ACTIVE')
+    const membership = db.memberships.find((item) =>
+      item.userId === user.id && item.locationId === locationId && item.active &&
+      (item.role === 'EMPLOYEE' || item.role === 'MANAGER') &&
+      (item.businessId === business.id || location?.businessId === business.id)
+    )
+    if (!location || !membership) throw new ApiError(403, 'Você não tem acesso ao PDV desta unidade.')
+    return ok(db.products.filter((product) => product.businessId === business.id && product.active).map((product) => ({
+      ...product,
+      locationId: location.id,
+      locationName: location.name,
+      quantity: db.inventories.find((item) => item.productId === product.id && item.locationId === location.id)?.quantity ?? 0,
+    })))
+  }
+
+  if (segs[2] === 'sales' && method === 'post') {
+    const { businessId, locationId, items, paymentMethod } = body ?? {}
+    const business = db.businesses.find((item) => item.id === businessId && item.sellsProducts && item.status === 'ACTIVE')
+    const location = db.locations.find((item) => item.id === locationId && item.businessId === businessId && item.status === 'ACTIVE')
+    const membership = db.memberships.find((item) =>
+      item.userId === user.id && item.locationId === locationId && item.active &&
+      (item.role === 'EMPLOYEE' || item.role === 'MANAGER') &&
+      (item.businessId === businessId || location?.businessId === businessId)
+    )
+    if (!business) throw new ApiError(403, 'O PDV não está ativo para este negócio.')
+    if (!location || !membership) throw new ApiError(403, 'Você não tem acesso ao PDV desta unidade.')
+    if (!Array.isArray(items) || !items.length) throw new ApiError(400, 'Adicione pelo menos um produto à venda.')
+    if (!['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'PIX'].includes(paymentMethod)) throw new ApiError(400, 'Forma de pagamento inválida.')
+
+    const quantities = new Map<string, number>()
+    for (const item of items) {
+      if (!Number.isSafeInteger(item?.quantity) || item.quantity <= 0) throw new ApiError(400, 'Quantidade inválida.')
+      quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity)
+    }
+    const lineItems = [...quantities].map(([productId, quantity]) => {
+      const product = db.products.find((entry) => entry.id === productId && entry.businessId === businessId && entry.active)
+      if (!product) throw new ApiError(404, 'Produto não encontrado ou inativo.')
+      const stock = db.inventories.find((entry) => entry.productId === productId && entry.locationId === locationId)
+      if (!stock || stock.quantity < quantity) throw new ApiError(409, `Estoque insuficiente para ${product.name}.`)
+      return { product, stock, quantity, subtotalCents: product.priceCents * quantity }
+    })
+    const totalCents = lineItems.reduce((sum, item) => sum + item.subtotalCents, 0)
+    if (!Number.isSafeInteger(totalCents) || totalCents <= 0) throw new ApiError(400, 'Total inválido.')
+
+    const now = new Date().toISOString()
+    const saleId = nextId('sale')
+    const sale = {
+      id: saleId,
+      businessId,
+      locationId,
+      totalCents,
+      paymentMethod,
+      createdAt: now,
+      seller: { userId: user.id, name: user.name },
+      items: lineItems.map(({ product, quantity, subtotalCents }) => ({
+        id: nextId('saleitem'), productId: product.id, productName: product.name,
+        unitPriceCents: product.priceCents, quantity, subtotalCents,
+      })),
+    }
+    for (const line of lineItems) {
+      line.stock.quantity -= line.quantity
+      line.stock.updatedAt = now
+      db.inventoryMovements.push({
+        id: nextId('stockmove'), productId: line.product.id, locationId,
+        actorUserId: user.id, type: 'SALE', quantityDelta: -line.quantity,
+        resultingQuantity: line.stock.quantity, reason: `Venda ${saleId}`,
+        saleId, createdAt: now,
+      })
+    }
+    db.sales.push(sale)
+    saveDb()
+    return { status: 201, body: sale }
+  }
+
+  throw new ApiError(404, 'Rota do PDV não encontrada no mock.')
+}
+
 function handleBusinesses(method: Method, segs: string[], query: URLSearchParams, body: any): MockResponse {
   const db = getDb()
 
@@ -1006,6 +1155,7 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
       if (body?.description !== undefined) business.description = body.description
       if (body?.phone !== undefined) business.phone = body.phone
       if (body?.categoryId !== undefined) business.categoryId = body.categoryId
+      if (typeof body?.sellsProducts === 'boolean') business.sellsProducts = body.sellsProducts
       saveDb()
       return ok(withBusinessRelations(business.id))
     }
@@ -1022,6 +1172,53 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
   if (segs.length === 3) {
     const businessId = segs[1]
     const resource = segs[2]
+
+    if (resource === 'products' && method === 'get') {
+      requireMockBusinessOwner(businessId)
+      return ok(db.products.filter((product) => product.businessId === businessId))
+    }
+    if (resource === 'products' && method === 'post') {
+      requireMockBusinessOwner(businessId)
+      const name = String(body?.name ?? '').trim()
+      const priceCents = Number(body?.priceCents)
+      if (!name || !Number.isSafeInteger(priceCents) || priceCents <= 0) {
+        throw new ApiError(400, 'Nome e preço válido são obrigatórios.')
+      }
+      const sku = body?.sku ? String(body.sku).trim() : null
+      if (sku && db.products.some((product) => product.businessId === businessId && product.sku === sku)) {
+        throw new ApiError(409, 'Este SKU já está cadastrado.')
+      }
+      const now = new Date().toISOString()
+      const product = {
+        id: nextId('product'), businessId, name, sku,
+        description: body?.description ? String(body.description).trim() : null,
+        priceCents, active: true, createdAt: now, updatedAt: now,
+      }
+      db.products.push(product)
+      saveDb()
+      return { status: 201, body: product }
+    }
+    if (resource === 'inventory' && method === 'get') {
+      requireMockBusinessOwner(businessId)
+      const locationId = query.get('locationId')
+      const location = db.locations.find((item) => item.id === locationId && item.businessId === businessId)
+      if (!location) throw new ApiError(404, 'Unidade não encontrada neste negócio.')
+      return ok(db.products.filter((product) => product.businessId === businessId).map((product) => ({
+        ...product,
+        locationId,
+        locationName: location.name,
+        quantity: db.inventories.find((item) => item.productId === product.id && item.locationId === locationId)?.quantity ?? 0,
+      })))
+    }
+    if (resource === 'sales' && method === 'get') {
+      requireMockBusinessOwner(businessId)
+      let list = db.sales.filter((sale) => sale.businessId === businessId)
+      const locationId = query.get('locationId')
+      if (locationId) list = list.filter((sale) => sale.locationId === locationId)
+      const page = Math.max(1, Number(query.get('page') || 1))
+      const limit = Math.min(100, Math.max(1, Number(query.get('limit') || 20)))
+      return ok({ data: list.slice((page - 1) * limit, page * limit), total: list.length })
+    }
 
     if (resource === 'locations' && method === 'get') {
       return ok(db.locations.filter((l) => l.businessId === businessId))
@@ -1163,6 +1360,56 @@ function handleBusinesses(method: Method, segs: string[], query: URLSearchParams
     if (resource === 'slots' && method === 'get') {
       return ok(handleSlots(businessId, query))
     }
+  }
+
+  if (segs.length === 4 && segs[2] === 'products' && method === 'patch') {
+    const businessId = segs[1]
+    requireMockBusinessOwner(businessId)
+    const product = db.products.find((item) => item.id === segs[3] && item.businessId === businessId)
+    if (!product) throw new ApiError(404, 'Produto não encontrado.')
+    if (body?.sku && db.products.some((item) => item.id !== product.id && item.businessId === businessId && item.sku === body.sku)) {
+      throw new ApiError(409, 'Este SKU já está cadastrado.')
+    }
+    if (body?.name !== undefined) {
+      const name = String(body.name).trim()
+      if (!name) throw new ApiError(400, 'Nome do produto é obrigatório.')
+      product.name = name
+    }
+    if (body?.sku !== undefined) product.sku = String(body.sku).trim() || null
+    if (body?.description !== undefined) product.description = String(body.description).trim() || null
+    if (body?.priceCents !== undefined) {
+      if (!Number.isSafeInteger(body.priceCents) || body.priceCents <= 0) throw new ApiError(400, 'Preço inválido.')
+      product.priceCents = body.priceCents
+    }
+    if (body?.active !== undefined) product.active = Boolean(body.active)
+    product.updatedAt = new Date().toISOString()
+    saveDb()
+    return ok(product)
+  }
+
+  if (segs.length === 4 && segs[2] === 'inventory' && segs[3] === 'movements' && method === 'post') {
+    const businessId = segs[1]
+    const actor = requireMockBusinessOwner(businessId)
+    const { productId, locationId, type, quantityDelta, reason } = body ?? {}
+    const product = db.products.find((item) => item.id === productId && item.businessId === businessId)
+    const location = db.locations.find((item) => item.id === locationId && item.businessId === businessId)
+    if (!product || !location) throw new ApiError(404, 'Produto ou unidade não encontrado neste negócio.')
+    if (!['STOCK_IN', 'ADJUSTMENT'].includes(type) || !Number.isSafeInteger(quantityDelta) || quantityDelta === 0 || !String(reason ?? '').trim()) {
+      throw new ApiError(400, 'Movimentação de estoque inválida.')
+    }
+    if (type === 'STOCK_IN' && quantityDelta < 0) throw new ApiError(400, 'Entrada deve ser positiva.')
+    const current = db.inventories.find((item) => item.productId === productId && item.locationId === locationId)
+    const quantity = (current?.quantity ?? 0) + quantityDelta
+    if (quantity < 0) throw new ApiError(409, 'Estoque insuficiente para esse ajuste.')
+    const now = new Date().toISOString()
+    if (current) { current.quantity = quantity; current.updatedAt = now }
+    else db.inventories.push({ productId, locationId, quantity, updatedAt: now })
+    db.inventoryMovements.push({
+      id: nextId('stockmove'), productId, locationId, actorUserId: actor.id,
+      type, quantityDelta, resultingQuantity: quantity, reason: String(reason).trim(), saleId: null, createdAt: now,
+    })
+    saveDb()
+    return ok({ ...product, locationId, locationName: location.name, quantity })
   }
 
   throw new ApiError(404, 'Rota de negócios não encontrada no mock')

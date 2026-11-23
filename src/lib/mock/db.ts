@@ -64,6 +64,56 @@ export interface MockService {
   membershipIds?: string[]
 }
 
+export interface MockProduct {
+  id: string
+  businessId: string
+  name: string
+  sku: string | null
+  description: string | null
+  priceCents: number
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MockInventory {
+  productId: string
+  locationId: string
+  quantity: number
+  updatedAt: string
+}
+
+export interface MockSale {
+  id: string
+  businessId: string
+  locationId: string
+  totalCents: number
+  paymentMethod: 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX'
+  createdAt: string
+  seller: { userId: string; name: string }
+  items: Array<{
+    id: string
+    productId: string | null
+    productName: string
+    unitPriceCents: number
+    quantity: number
+    subtotalCents: number
+  }>
+}
+
+export interface MockInventoryMovement {
+  id: string
+  productId: string
+  locationId: string
+  actorUserId: string
+  type: 'STOCK_IN' | 'ADJUSTMENT' | 'SALE'
+  quantityDelta: number
+  resultingQuantity: number
+  reason: string | null
+  saleId: string | null
+  createdAt: string
+}
+
 export interface MockWorkingHoursEntry {
   dayOfWeek: string
   startMinute: number
@@ -193,6 +243,10 @@ export interface MockDb {
   businesses: MockBusiness[]
   locations: MockLocation[]
   services: MockService[]
+  products: MockProduct[]
+  inventories: MockInventory[]
+  sales: MockSale[]
+  inventoryMovements: MockInventoryMovement[]
     memberships: MockMembership[]
     appointments: MockAppointment[]
     customerProfiles: MockCustomerProfile[]
@@ -611,6 +665,10 @@ function buildSeed(): MockDb {
       businesses,
       locations,
       services,
+      products: [],
+      inventories: [],
+      sales: [],
+      inventoryMovements: [],
       memberships,
       appointments,
       customerProfiles,
@@ -665,6 +723,10 @@ export function getDb(): MockDb {
         ) {
           // normalização: fixtures do contrato MOCK-FIRST podem não existir em DBs antigas
           if (!Array.isArray(parsed.customerProfiles)) parsed.customerProfiles = []
+          if (!Array.isArray(parsed.products)) parsed.products = []
+          if (!Array.isArray(parsed.inventories)) parsed.inventories = []
+          if (!Array.isArray(parsed.sales)) parsed.sales = []
+          if (!Array.isArray(parsed.inventoryMovements)) parsed.inventoryMovements = []
           if (!Array.isArray(parsed.businessVerifications)) parsed.businessVerifications = []
           if (!parsed.preferences || typeof parsed.preferences !== 'object') parsed.preferences = {}
           memoryDb = parsed

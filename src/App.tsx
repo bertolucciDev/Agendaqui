@@ -12,6 +12,8 @@ import SupportGuard from '@/components/layout/support-guard'
 import SupportLayout from '@/components/layout/support-layout'
 
 const HomePage = lazy(() => import('@/pages/home'))
+const ProductsPage = lazy(() => import('@/pages/products'))
+const PosPage = lazy(() => import('@/pages/pos'))
 const LoginPage = lazy(() => import('@/pages/login'))
 const RegisterPage = lazy(() => import('@/pages/register'))
 const DashboardPage = lazy(() => import('@/pages/dashboard'))
@@ -43,6 +45,7 @@ const SupportAccountsPage = lazy(() => import('@/pages/support/accounts'))
 const SupportTicketPage = lazy(() => import('@/pages/support/ticket'))
 const HelpPage = lazy(() => import('@/pages/help'))
 const HelpTicketPage = lazy(() => import('@/pages/help/ticket'))
+const MyNotificationsPage = lazy(() => import('@/pages/my-notifications'))
 
 export function LoadingFallback() {
   return (
@@ -113,6 +116,8 @@ export default function App() {
             <Route path="/businesses/new" element={<Navigate to="/onboarding/business/new" replace />} />
             <Route path="/locations" element={<LocationsPage />} />
             <Route path="/locations/new" element={<LocationNewPage />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/pos" element={<PosPage />} />
             <Route path="/services" element={<ServicesPage />} />
             <Route path="/services/new" element={<ServiceNewPage />} />
             <Route path="/staff" element={<StaffPage />} />
@@ -150,6 +155,7 @@ export default function App() {
 
           {/* Ajuda não depende de workspace ou de negócio ativo: qualquer conta autenticada pode abrir chamados. */}
           <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+            <Route path="/my-notifications" element={<MyNotificationsPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/help/tickets/:ticketId" element={<HelpTicketPage />} />
           </Route>
@@ -158,6 +164,14 @@ export default function App() {
             <Route element={<SupportLayout />}>
               <Route path="/support" element={<SupportDashboardPage />} />
               <Route path="/support/accounts" element={<SupportAccountsPage />} />
+              <Route
+                path="/support/verifications"
+                element={<AdminVerificationsPage reviewPath="/support/verifications" />}
+              />
+              <Route
+                path="/support/verifications/:id"
+                element={<AdminVerificationDetailPage reviewPath="/support/verifications" supportMode />}
+              />
               <Route path="/support/settings" element={<SettingsPage supportMode />} />
               <Route path="/support/tickets/:ticketId" element={<SupportTicketPage />} />
             </Route>

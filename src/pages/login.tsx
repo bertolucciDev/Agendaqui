@@ -9,6 +9,7 @@ import { extractApiMessage, extractApiStatus } from '@/lib/api-error'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { notify } from '@/lib/notify'
+import { AgendaquiMark } from '@/components/shared/agendaqui-mark'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -52,7 +53,10 @@ export default function LoginPage() {
         <aside aria-hidden="true" className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 p-12 flex-col justify-between relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNCI+PHBhdGggZD0iTTM2IDM0djItSDJ2LTJoMzRtMC00djJIMnYtMmgzNG0wLTR2Mkgudi0yaDM0bTAtNHYySDJ2LTJoMzQiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
         <div className="relative z-10">
-          <Link to="/" className="text-xl font-bold text-white font-display">Agendaqui</Link>
+          <Link to="/" className="inline-flex items-center gap-2.5 text-xl font-bold text-white font-display">
+            <AgendaquiMark className="h-9 w-9 rounded-lg" />
+            Agendaqui
+          </Link>
             <h2 className="mt-20 text-4xl font-bold text-white leading-tight font-display">
               Gerencie seus<br />agendamentos
             </h2>
@@ -74,7 +78,10 @@ export default function LoginPage() {
         <main className="flex-1 flex items-center justify-center p-8 bg-surface">
           <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
-            <Link to="/" className="text-lg font-bold text-primary-500 font-display">Agendaqui</Link>
+            <Link to="/" className="inline-flex items-center gap-2 text-lg font-bold text-primary-500 font-display">
+              <AgendaquiMark className="h-8 w-8 rounded-lg" />
+              Agendaqui
+            </Link>
           </div>
 
           <h1 className="text-2xl font-bold text-foreground font-display">Bem-vindo de volta</h1>

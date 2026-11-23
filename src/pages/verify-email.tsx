@@ -6,6 +6,7 @@ import { useAuth } from '@/app/providers/auth'
 import { notify } from '@/lib/notify'
 import { CheckCircle2, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AgendaquiMark } from '@/components/shared/agendaqui-mark'
 import { cn } from '@/lib/utils'
 
 export default function VerifyEmailPage() {
@@ -155,9 +156,7 @@ export default function VerifyEmailPage() {
         </Link>
 
         <div className="mb-8 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-            A
-          </div>
+          <AgendaquiMark className="h-8 w-8 rounded-lg" />
           <span className="text-lg font-bold tracking-tight text-foreground font-display">
             Agendaqui
           </span>

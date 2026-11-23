@@ -30,6 +30,7 @@ export function AppointmentActions({
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['appointments'] })
     void queryClient.invalidateQueries({ queryKey: ['appointments-today'] })
+    void queryClient.invalidateQueries({ queryKey: ['professional-agenda'] })
   }
 
   /**

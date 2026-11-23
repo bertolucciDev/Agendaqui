@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Agendaqui
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplicação web da plataforma Agendaqui para descoberta e agendamento de serviços. O workspace de desenvolvimento mantém este frontend separado da API NestJS em `../agendaqui-api`.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19, TypeScript e Vite 6
+- React Router para navegação
+- TanStack Query e Axios para consultas e integração HTTP
+- Vitest e Testing Library para testes de interface e serviços
 
-## React Compiler
+## Executar localmente
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Configure as variáveis locais a partir de `.env.example`; não versione `.env` nem credenciais.
+2. Inicie a API Agendaqui em ambiente de desenvolvimento isolado.
+3. Execute `npm run dev` para usar a configuração corrente. O proxy `/agendaqui-api` usa `VITE_API_PROXY_TARGET` quando definida; caso contrário, aponta para a API hospedada.
+4. Abra a URL local indicada pelo Vite.
 
-## Expanding the Oxlint configuration
+`VITE_USE_MOCK=true` ativa os adapters locais de demonstração/teste. Para integração com API real, use `VITE_USE_MOCK=false` e um alvo de API apropriado. Evite apontar testes ou cadastros de demonstração para banco de produção.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Comandos
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+| Comando | Uso |
+|---|---|
+| `npm run dev` | Servidor local Vite |
+| `npm run dev:real` | Servidor Vite com adapters mock desativados |
+| `npm run typecheck` | Verificação TypeScript |
+| `npm test` | Suítes Vitest |
+| `npm run build` | Build de produção |
+| `npm run check:contract` | Confere caminhos de API usados no frontend contra as rotas do backend |
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Escopo funcional
+
+O frontend contém fluxos de cadastro/autenticação, negócio e verificação, agenda, serviços, unidades, equipe, painéis admin e suporte, ajuda/chat, configurações e as telas de funcionário/gerente/PDV em evolução. Consulte o código e os testes para distinguir funcionalidades implementadas de fluxos integrados já validados.
+
+## Preparação do TCC
+
+O roteiro de demonstração, a matriz mínima de validação, os resultados desta revisão e as pendências de integração estão em [TCC-readiness.md](../agendaqui-api/docs/TCC-readiness.md). Essa revisão é condicional: os testes/builds locais passaram, mas ela não comprova um fluxo real completo no navegador.

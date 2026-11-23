@@ -10,8 +10,18 @@ import { useAuth } from '@/app/providers/auth'
 import { useActiveBusiness } from '@/app/hooks/use-active-business'
 import { useWorkspace } from '@/app/providers/workspace'
 import { PageHeader, PageTitle, PageContent } from '@/components/ui/page'
+import ProfessionalDashboardPage from '@/pages/professional-dashboard'
+import ManagerDashboardPage from '@/pages/manager-dashboard'
 
 export default function DashboardPage() {
+  const { activeMode, activeMembership } = useWorkspace()
+  if (activeMode === 'PROFESSIONAL') return <ProfessionalDashboardPage />
+  if (activeMembership?.role === 'MANAGER') return <ManagerDashboardPage />
+
+  return <ManagementDashboardPage />
+}
+
+function ManagementDashboardPage() {
   const today = new Date().toISOString().split('T')[0]
   const { user } = useAuth()
   const { businessId, businesses, activeMode } = useActiveBusiness()

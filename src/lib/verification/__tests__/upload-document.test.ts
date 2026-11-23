@@ -170,7 +170,10 @@ describe('uploadVerificationDocument', () => {
     const d = deps()
     await uploadVerificationDocument(file(), 'COMPROVANTE_CNPJ', () => {}, d)
     const [url, init] = (d.put as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]
-    expect(init.headers).toEqual({ 'Content-Type': 'image/jpeg' })
+    expect(init.headers).toEqual({
+      'Content-Type': 'image/jpeg',
+      'If-None-Match': '*',
+    })
     expect(url).not.toContain('business')
   })
 })

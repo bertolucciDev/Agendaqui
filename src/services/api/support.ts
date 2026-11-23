@@ -21,6 +21,7 @@ export interface CreateSupportTicketInput {
 
 export interface SupportQueueParams {
   status?: SupportTicketStatus
+  archiveStatus?: 'ACTIVE' | 'ARCHIVED'
   category?: SupportTicketCategory
   priority?: SupportTicketPriority
   assignee?: string
@@ -86,6 +87,14 @@ export const supportApi = {
   },
   finalizeTicket: async (ticketId: string): Promise<SupportTicket> => {
     const { data } = await apiClient.post<SupportTicket>(`support/tickets/${ticketId}/finalize`)
+    return data
+  },
+  archiveTicket: async (ticketId: string): Promise<SupportTicket> => {
+    const { data } = await apiClient.patch<SupportTicket>(`support/tickets/${ticketId}/archive`)
+    return data
+  },
+  restoreTicket: async (ticketId: string): Promise<SupportTicket> => {
+    const { data } = await apiClient.patch<SupportTicket>(`support/tickets/${ticketId}/restore`)
     return data
   },
   rateTicket: async (ticketId: string, rating: number): Promise<SupportRatingSubmission> => {

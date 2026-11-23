@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   CalendarDays,
   Plus,
@@ -39,14 +39,31 @@ const MONTHS = [
 ]
 
 export default function AppointmentsPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [searchParams] = useSearchParams()
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const startsAt = searchParams.get('startsAt')
+    const deepLinkDate = startsAt ? new Date(startsAt) : null
+    return deepLinkDate && !Number.isNaN(deepLinkDate.getTime()) ? deepLinkDate : new Date()
+  })
   const [view, setView] = useState<'week' | 'day'>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 640) return 'day'
     return 'week'
   })
   /* Guardamos o ID, não o objeto: o painel precisa refletir o estado novo
    * depois de uma mutação (o backend devolve 204 e o front refaz o GET). */
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(() =>
+    searchParams.get('appointmentId')
+  )
+
+  useEffect(() => {
+    const appointmentId = searchParams.get('appointmentId')
+    const startsAt = searchParams.get('startsAt')
+    if (appointmentId) setSelectedAppointmentId(appointmentId)
+    if (startsAt) {
+      const date = new Date(startsAt)
+      if (!Number.isNaN(date.getTime())) setSelectedDate(date)
+    }
+  }, [searchParams])
 
   const weekStart = useMemo(() => {
     const d = new Date(selectedDate)
@@ -94,6 +111,14 @@ export default function AppointmentsPage() {
     queryKey: ['appointments', activeMode, businessId, weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
       if (!businessId) return []
+      if (activeMode === 'PROFESSIONAL') {
+        return appointmentsApi.listProfessionalAgenda({
+          businessId,
+          dateFrom: weekStart.toISOString(),
+          dateTo: weekEnd.toISOString(),
+          limit: 100,
+        })
+      }
       const res = await appointmentsApi.listBusiness(businessId, {
         dateFrom: weekStart.toISOString(),
         dateTo: weekEnd.toISOString(),
@@ -185,12 +210,14 @@ export default function AppointmentsPage() {
               Dia
             </button>
           </div>
-          <Link to="/appointments/new">
-            <Button size="sm">
-              <Plus className="h-4 w-4" />
-              Novo
-            </Button>
-          </Link>
+          {activeMode !== 'PROFESSIONAL' && (
+            <Link to="/appointments/new">
+              <Button size="sm">
+                <Plus className="h-4 w-4" />
+                Novo
+              </Button>
+            </Link>
+          )}
         </div>
       </PageHeader>
 
@@ -305,14 +332,14 @@ export default function AppointmentsPage() {
               icon={CalendarDays}
               title="Nenhum agendamento esta semana"
               description="Os agendamentos dos seus clientes aparecerão aqui."
-              action={
+              action={activeMode === 'PROFESSIONAL' ? undefined : (
                 <Link to="/appointments/new">
                   <Button>
                     <Plus className="h-4 w-4" />
                     Criar agendamento
                   </Button>
                 </Link>
-              }
+              )}
             />
           )}
         </div>
@@ -394,7 +421,11 @@ export default function AppointmentsPage() {
                   <AppointmentActions
                     appointment={selectedAppointment}
                     role={currentRole}
-                    membershipId={currentMembershipId}
+                    membershipId={
+                      activeMode === 'PROFESSIONAL'
+                        ? selectedAppointment.employeeMembershipId
+                        : currentMembershipId
+                    }
                     onUpdated={() => undefined}
                   />
                 </div>

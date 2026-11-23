@@ -1,9 +1,10 @@
-import { LifeBuoy, LogOut, Settings, UsersRound } from 'lucide-react'
+import { ClipboardCheck, LifeBuoy, LogOut, Settings, UsersRound } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/app/providers/auth'
 import { ThemeSwitch } from '@/components/ui/theme-switch'
 import { cn } from '@/lib/utils'
 import { SupportNotificationBell } from '@/components/support/support-notification-bell'
+import { AgendaquiMark } from '@/components/shared/agendaqui-mark'
 
 export default function SupportLayout() {
   const { user, logout } = useAuth()
@@ -12,9 +13,7 @@ export default function SupportLayout() {
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="flex h-screen w-16 shrink-0 flex-col border-r border-border bg-surface sm:w-64">
         <div className="flex h-20 items-center justify-center gap-3 border-b border-border px-2 sm:justify-start sm:px-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <LifeBuoy className="h-5 w-5" />
-          </div>
+          <AgendaquiMark className="h-10 w-10 rounded-xl" />
           <div className="hidden sm:block">
             <Link to="/support" className="font-display text-base font-bold text-foreground">
               Agendaqui
@@ -50,6 +49,18 @@ export default function SupportLayout() {
           >
             <UsersRound className="h-5 w-5" />
             <span className="sr-only sm:not-sr-only">Contas</span>
+          </NavLink>
+          <NavLink
+            to="/support/verifications"
+            className={({ isActive }) => cn(
+              'mt-2 flex items-center justify-center gap-3 rounded-xl px-2 py-3 text-sm font-medium sm:justify-start sm:px-4',
+              isActive
+                ? 'bg-primary-soft text-primary-soft-fg'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <ClipboardCheck className="h-5 w-5" />
+            <span className="sr-only sm:not-sr-only">Verificação de negócios</span>
           </NavLink>
           <NavLink
             to="/support/settings"

@@ -117,14 +117,16 @@ function formatDate(iso: string | null) {
 
 function VerificationCard({
   item,
+  reviewPath,
 }: {
   item: AdminVerificationSummary
+  reviewPath: string
 }) {
   const docsCount = item.documents?.length ?? 0
 
   return (
     <Link
-      to={`/admin/verifications/${item.verificationId}`}
+      to={`${reviewPath}/${item.verificationId}`}
       className="group block rounded-xl border border-border bg-surface p-5 transition-all duration-200 hover:border-primary-accent hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-4">
@@ -187,7 +189,11 @@ function VerificationSkeleton() {
   )
 }
 
-export default function AdminVerificationsPage() {
+export default function AdminVerificationsPage({
+  reviewPath = '/admin/verifications',
+}: {
+  reviewPath?: string
+}) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
 
@@ -411,6 +417,7 @@ export default function AdminVerificationsPage() {
               <VerificationCard
                 key={item.verificationId}
                 item={item}
+                reviewPath={reviewPath}
               />
             ))}
           </div>

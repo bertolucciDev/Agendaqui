@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '@/app/providers/auth'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi, usersApi } from '@/services/api'
+import { notificationsApi } from '@/services/api/notifications'
 import { notify } from '@/lib/notify'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,7 +30,6 @@ import {
 const NOTIFICATION_ITEMS: { key: keyof NotificationPreferences; label: string; description: string }[] = [
   { key: 'appointments', label: 'Novos agendamentos', description: 'Receber aviso quando um cliente agendar' },
   { key: 'cancellations', label: 'Cancelamentos', description: 'Receber aviso quando um agendamento for cancelado' },
-  { key: 'reminders', label: 'Lembretes', description: 'Receber lembretes antes dos agendamentos' },
 ]
 
 export default function SettingsPage({ supportMode = false }: { supportMode?: boolean }) {
@@ -50,6 +50,21 @@ export default function SettingsPage({ supportMode = false }: { supportMode?: bo
   const [notifications, setNotifications] = useState<NotificationPreferences>(() =>
     loadNotificationPreferences()
   )
+  const reminderPreferenceQuery = useQuery({
+    queryKey: ['notifications', 'preferences'],
+    queryFn: notificationsApi.getPreference,
+    enabled: !supportMode,
+  })
+  const reminderPreferenceMutation = useMutation({
+    mutationFn: notificationsApi.updatePreference,
+    onSuccess: (preference) => {
+      queryClient.setQueryData(['notifications', 'preferences'], preference)
+      notify.success(preference.emailAppointmentRemindersEnabled
+        ? 'Lembretes por e-mail ativados.'
+        : 'Lembretes por e-mail desativados.')
+    },
+    onError: (error: unknown) => notify.error(extractApiMessage(error) ?? 'Não foi possível salvar essa preferência.'),
+  })
   const notificationItems = supportMode
     ? [...NOTIFICATION_ITEMS, {
         key: 'supportTicketSound' as const,
@@ -434,7 +449,34 @@ export default function SettingsPage({ supportMode = false }: { supportMode?: bo
                         </div>
                       </label>
                     ))}
+                    {!supportMode ? (
+                      <label className="flex items-center justify-between rounded-xl border border-border p-4 transition-all hover:border-border-strong">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Lembretes por e-mail</p>
+                          <p className="text-xs text-muted-foreground">Receber um lembrete 24 horas antes dos agendamentos confirmados</p>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            checked={reminderPreferenceQuery.data?.emailAppointmentRemindersEnabled ?? false}
+                            disabled={reminderPreferenceQuery.isPending || reminderPreferenceMutation.isPending || reminderPreferenceQuery.isError}
+                            onChange={(event) => reminderPreferenceMutation.mutate(event.target.checked)}
+                            aria-label="Lembretes por e-mail"
+                            className="peer sr-only"
+                          />
+                          <div className="h-6 w-11 rounded-full bg-border transition-colors peer-checked:bg-primary peer-disabled:opacity-50">
+                            <div className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                          </div>
+                        </div>
+                      </label>
+                    ) : null}
                   </div>
+
+                  {!supportMode && reminderPreferenceQuery.isError ? (
+                    <p role="alert" className="mt-3 text-xs text-destructive">
+                      Não foi possível carregar a preferência de lembretes. Tente novamente.
+                    </p>
+                  ) : null}
 
                   {supportMode ? (
                     <p className="mt-4 text-xs text-muted-foreground">
@@ -444,7 +486,7 @@ export default function SettingsPage({ supportMode = false }: { supportMode?: bo
                   <p className="mt-4 text-xs text-muted-foreground">
                     {supportMode
                       ? 'Estas preferências ficam salvas apenas neste navegador; as opções de agendamentos ainda não enviam notificações.'
-                      : 'Estas preferências ficam salvas apenas neste navegador (dispositivo). O servidor ainda não oferece preferências de notificação — ao entrar em outro dispositivo, elas voltam ao padrão. No momento, estas opções ainda não controlam o envio de notificações.'}
+                      : 'Avisos de novos agendamentos e cancelamentos ficam salvos neste navegador. A opção de lembrete por e-mail é salva na sua conta e pode ser desativada quando quiser.'}
                   </p>
                 </div>
               )}

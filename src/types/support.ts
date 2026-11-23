@@ -92,6 +92,7 @@ export interface SupportTicket {
   createdAt: string
   updatedAt: string
   acceptedAt: string | null
+  archivedAt: string | null
   requester: { id: string; name: string; email: string }
   assignee: { id: string; name: string; email: string } | null
   conversation: { id: string; messages: SupportMessage[] } | null

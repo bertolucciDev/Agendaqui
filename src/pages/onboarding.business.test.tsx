@@ -175,15 +175,8 @@ function mount(initial = EMPTY_OUTPUT) {
   // invalidação devolve a solicitação nova, como no backend real.
   getMy.mockImplementation(async () => serverState)
   create.mockImplementation(async (payload: Record<string, unknown>) => {
-    // Validação de domínio espelhada do backend (deriveResponsibleCpf): COMPANY
-    // exige CPF do responsável — foi assim que o P-1 escapou dos testes
-    // hipotéticos que não validavam o domínio aqui.
-    if (
-      payload.businessType === 'COMPANY' &&
-      String(payload.responsibleCpf ?? '').replace(/\D/g, '').length !== 11
-    ) {
-      throw httpError(400, 'CPF do responsável é obrigatório para pessoa jurídica.')
-    }
+    // O backend deriva responsibleCpf do documento apenas para INDIVIDUAL;
+    // para COMPANY, o CPF pessoal não é solicitado nem enviado pelo formulário.
     serverState = output({
       status: 'DRAFT',
       businessType: payload.businessType as BusinessVerification['businessType'],
@@ -192,7 +185,8 @@ function mount(initial = EMPTY_OUTPUT) {
       categoryId: payload.categoryId as string,
       legalName: (payload.legalName as string) ?? null,
       responsibleName: (payload.responsibleName as string) ?? null,
-      responsibleCpf: (payload.responsibleCpf as string) ?? null,
+      responsibleCpf:
+        payload.businessType === 'INDIVIDUAL' ? (payload.document as string) : null,
       phone: (payload.phone as string) ?? null,
       requiredDocumentTypes:
         payload.businessType === 'COMPANY' ? ['COMPROVANTE_CNPJ'] : ['CPF_FRENTE', 'CPF_VERSO'],
@@ -239,15 +233,10 @@ function pdfFile(name = 'comprovante.pdf') {
   return new File([new Uint8Array(12)], name, { type: 'application/pdf' })
 }
 
-async function fillCompanyForm({ skipResponsibleCpf = false } = {}) {
+async function fillCompanyForm() {
   fireEvent.click(screen.getByTestId('pick-cnpj'))
   fireEvent.change(screen.getByLabelText('CNPJ'), { target: { value: '04.252.011/0001-10' } })
   fireEvent.change(screen.getByLabelText('Nome fantasia'), { target: { value: 'Barbearia Teste' } })
-  if (!skipResponsibleCpf) {
-    fireEvent.change(screen.getByLabelText('CPF do responsável'), {
-      target: { value: '111.444.777-35' },
-    })
-  }
   const select = await screen.findByLabelText('Categoria')
   await waitFor(() => expect(screen.getByRole('option', { name: 'Barbearia' })).toBeTruthy())
   fireEvent.change(select, { target: { value: 'cat_1' } })
@@ -299,22 +288,21 @@ describe('O-01/O-02/O-16 — DRAFT', () => {
     )
     // Nenhum campo de endereço: não existe mais no contrato de criação.
     expect(create.mock.calls[0][0]).not.toHaveProperty('address')
-    // COMPANY exige CPF do responsável (deriveResponsibleCpf no backend) —
-    // enviado em dígitos crus, sem a máscara de apresentação.
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ responsibleCpf: '11144477735' }))
+    // Para COMPANY, CPF de pessoa física não faz parte do payload.
+    expect(create.mock.calls[0][0]).not.toHaveProperty('responsibleCpf')
+    expect(serverState.responsibleCpf).toBeNull()
   })
 
-  it('P-1: COMPANY sem CPF do responsável é barrado pela validação local (API intacta)', async () => {
+  it('P-1: COMPANY não solicita CPF pessoal no cadastro do negócio', async () => {
     mount(EMPTY_OUTPUT)
     await waitFor(() => expect(screen.getByText('Como seu negócio está registrado?')).toBeTruthy())
 
-    await fillCompanyForm({ skipResponsibleCpf: true })
+    await fillCompanyForm()
     fireEvent.click(screen.getByRole('button', { name: 'Abrir solicitação' }))
 
-    await waitFor(() =>
-      expect(screen.getByText('Informe o CPF do responsável (11 dígitos)')).toBeTruthy(),
-    )
-    expect(create).not.toHaveBeenCalled()
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0][0]).not.toHaveProperty('responsibleCpf')
+    expect(serverState.responsibleCpf).toBeNull()
   })
 
   it('O-02: DRAFT existente é preservado — a edição usa PATCH, nunca POST', async () => {

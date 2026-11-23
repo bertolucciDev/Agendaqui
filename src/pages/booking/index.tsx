@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Clock,
   Calendar,
@@ -39,6 +39,7 @@ const STEPS: BookingStep[] = [
 ]
 
 export default function BookingPage() {
+  const navigate = useNavigate()
   const { slug } = useParams<{ slug: string }>()
   const { isAuthenticated, user } = useAuth()
   const [currentStep, setCurrentStep] = useState(0)
@@ -540,6 +541,16 @@ export default function BookingPage() {
                 </CardContent>
               </Card>
             )}
+            {isAuthenticated ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-6"
+                onClick={() => navigate('/my-notifications')}
+              >
+                Ver meus lembretes
+              </Button>
+            ) : null}
           </div>
         )}
       </main>
