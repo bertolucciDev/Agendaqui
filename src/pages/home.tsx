@@ -1,15 +1,14 @@
 import { Link } from 'react-router-dom'
 import { CalendarDays, ArrowRight, Clock, Users, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AgendaquiMark } from '@/components/shared/agendaqui-mark'
 
 export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="flex items-center justify-between border-b border-border px-5 py-4 lg:px-10">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-            A
-          </div>
+          <AgendaquiMark className="h-8 w-8 rounded-lg" />
           <span className="text-lg font-bold tracking-tight text-foreground font-display">
             Agendaqui
           </span>

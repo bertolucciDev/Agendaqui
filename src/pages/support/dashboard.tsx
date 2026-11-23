@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Star } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Archive, ArchiveRestore, Star } from 'lucide-react'
 import { PageContent, PageHeader, PageTitle } from '@/components/ui/page'
 import { supportApi } from '@/services/api/support'
 import { TicketConversation } from '@/components/support/ticket-conversation'
 import { connectSupportSocket } from '@/services/api/support-chat'
 import { useNotificationSound } from '@/hooks/use-notification-sound'
 import { loadNotificationPreferences } from '@/lib/notification-preferences'
+import { notify } from '@/lib/notify'
 import {
   SUPPORT_TICKET_CATEGORIES,
   SUPPORT_TICKET_PRIORITIES,
@@ -19,6 +20,7 @@ import {
 
 type QueueFilters = {
   status?: SupportTicketStatus
+  archiveStatus: 'ACTIVE' | 'ARCHIVED'
   category?: SupportTicketCategory
   priority?: SupportTicketPriority
   assignee?: string
@@ -28,13 +30,22 @@ const PAGE_SIZE = 20
 export default function SupportDashboardPage() {
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
-  const [filters, setFilters] = useState<QueueFilters>({})
+  const [filters, setFilters] = useState<QueueFilters>({ archiveStatus: 'ACTIVE' })
   const [page, setPage] = useState(1)
   const queue = useQuery({
     queryKey: ['support-queue', filters, page],
     queryFn: () => supportApi.listQueue({ ...filters, page, limit: PAGE_SIZE }),
   })
   const queryClient = useQueryClient()
+  const archiveMutation = useMutation({
+    mutationFn: ({ ticketId, archived }: { ticketId: string; archived: boolean }) =>
+      archived ? supportApi.restoreTicket(ticketId) : supportApi.archiveTicket(ticketId),
+    onSuccess: (_ticket, variables) => {
+      notify.success(variables.archived ? 'Chamado restaurado para a fila.' : 'Chamado arquivado.')
+      void queryClient.invalidateQueries({ queryKey: ['support-queue'] })
+    },
+    onError: (error) => notify.error(error),
+  })
   const notificationSound = useNotificationSound(loadNotificationPreferences().supportTicketSound)
   const requestedTicketId = searchParams.get('ticketId')
 
@@ -103,7 +114,14 @@ export default function SupportDashboardPage() {
               <TicketCount label="Encerrados" count={queue.data.counts.CLOSED} />
             </div>
           ) : null}
-          <div className="grid gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 rounded-xl border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5">
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Chamados</span>
+              <select value={filters.archiveStatus} onChange={(event) => updateFilter('archiveStatus', event.target.value as QueueFilters['archiveStatus'])} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
+                <option value="ACTIVE">Ativos</option>
+                <option value="ARCHIVED">Arquivados</option>
+              </select>
+            </label>
             <label className="space-y-1 text-xs text-muted-foreground">
               <span>Status</span>
               <select value={filters.status ?? ''} onChange={(event) => updateFilter('status', (event.target.value || undefined) as SupportTicketStatus | undefined)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground">
@@ -163,9 +181,17 @@ export default function SupportDashboardPage() {
             </section>
           ) : null}
           {queue.isPending ? <p className="text-sm text-muted-foreground">Carregando fila…</p> : null}
-          {queue.data?.tickets.length === 0 ? <p className="rounded-xl border border-border bg-surface p-5 text-sm text-muted-foreground">{queue.data.counts.total === 0 ? 'Nenhum chamado foi aberto ainda.' : 'Nenhum chamado corresponde a esses filtros.'}</p> : null}
+          {queue.data?.tickets.length === 0 ? <p className="rounded-xl border border-border bg-surface p-5 text-sm text-muted-foreground">{queue.data.counts.total === 0 ? (filters.archiveStatus === 'ARCHIVED' ? 'Nenhum chamado arquivado.' : 'Nenhum chamado foi aberto ainda.') : 'Nenhum chamado corresponde a esses filtros.'}</p> : null}
           <div className="space-y-2">
-            {queue.data?.tickets.map((ticket) => <QueueTicket key={ticket.id} ticket={ticket} onOpen={() => openTicket(ticket.id)} />)}
+            {queue.data?.tickets.map((ticket) => (
+              <QueueTicket
+                key={ticket.id}
+                ticket={ticket}
+                onOpen={() => openTicket(ticket.id)}
+                onArchive={() => archiveMutation.mutate({ ticketId: ticket.id, archived: Boolean(ticket.archivedAt) })}
+                archivePending={archiveMutation.isPending && archiveMutation.variables?.ticketId === ticket.id}
+              />
+            ))}
           </div>
           {queue.data && queue.data.total > 0 ? (
             <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -190,23 +216,48 @@ function TicketCount({ label, count }: { label: string; count: number }) {
   return <div className="rounded-xl border border-border bg-surface p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold text-foreground">{count}</p></div>
 }
 
-function QueueTicket({ ticket, onOpen }: { ticket: SupportTicket; onOpen: () => void }) {
+function QueueTicket({
+  ticket,
+  onOpen,
+  onArchive,
+  archivePending,
+}: {
+  ticket: SupportTicket
+  onOpen: () => void
+  onArchive: () => void
+  archivePending: boolean
+}) {
   const status = ticket.status === 'OPEN' ? 'Aguardando' : ticket.status === 'IN_PROGRESS' ? 'Em atendimento' : ticket.status === 'RESOLVED' ? 'Resolvido' : 'Encerrado'
   const category = SUPPORT_TICKET_CATEGORIES.find((item) => item.value === ticket.category)?.label ?? 'Outros'
   const priority = SUPPORT_TICKET_PRIORITIES.find((item) => item.value === (ticket.priority ?? 'NORMAL'))?.label ?? 'Normal'
   const latest = ticket.conversation?.messages[0]
   return (
-    <button type="button" onClick={onOpen} className="flex w-full flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-colors hover:border-primary/50">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-foreground">{ticket.subject}</p>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{ticket.requester.name} · {ticket.requester.email}</p>
-        {latest ? <p className="mt-1 truncate text-xs text-muted-foreground">{latest.sender.name}: {latest.body}</p> : null}
-      </div>
-      <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{status}</span>
-      <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{category}</span>
-      <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{priority}</span>
-      <span className="max-w-32 truncate text-xs text-muted-foreground">{ticket.assignee?.name ?? 'Sem responsável'}</span>
-      <time className="text-xs text-muted-foreground" dateTime={ticket.updatedAt}>{new Date(ticket.updatedAt).toLocaleDateString('pt-BR')}</time>
-    </button>
+    <div className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:border-primary/50">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 flex-wrap items-center gap-3 p-1 text-left">
+        <div className="min-w-0 flex-1 basis-48">
+          <p className="truncate text-sm font-semibold text-foreground">{ticket.subject}</p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{ticket.requester.name} · {ticket.requester.email}</p>
+          {latest ? <p className="mt-1 truncate text-xs text-muted-foreground">{latest.sender.name}: {latest.body}</p> : null}
+        </div>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{status}</span>
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{category}</span>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{priority}</span>
+        <span className="max-w-32 truncate text-xs text-muted-foreground">{ticket.assignee?.name ?? 'Sem responsável'}</span>
+        <time className="text-xs text-muted-foreground" dateTime={ticket.updatedAt}>{new Date(ticket.updatedAt).toLocaleDateString('pt-BR')}</time>
+      </button>
+      {ticket.status === 'CLOSED' ? (
+        <button
+          type="button"
+          onClick={onArchive}
+          disabled={archivePending}
+          aria-label={ticket.archivedAt ? 'Restaurar chamado' : 'Arquivar chamado'}
+          title={ticket.archivedAt ? 'Restaurar chamado' : 'Arquivar chamado'}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-50"
+        >
+          {ticket.archivedAt ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+          <span className="hidden sm:inline">{ticket.archivedAt ? 'Restaurar' : 'Arquivar'}</span>
+        </button>
+      ) : null}
+    </div>
   )
 }

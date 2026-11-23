@@ -29,6 +29,8 @@ function mount(sessionState: { session: any; isSessionLoading: boolean }, initia
   return render(
     <MemoryRouter initialEntries={[initial]}>
       <Routes>
+        {/* No App, /admin fica fora da árvore que contém FirstBusinessGuard. */}
+        <Route path="/admin" element={<LocationProbe />} />
         <Route path="*" element={<AdminContent />} />
       </Routes>
     </MemoryRouter>,

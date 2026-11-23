@@ -1,5 +1,6 @@
 
 import { Link, useLocation, Outlet } from 'react-router-dom'
+import { AgendaquiMark } from '@/components/shared/agendaqui-mark'
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -53,9 +54,7 @@ export default function AdminLayout() {
         {/* Logo */}
         <div className="flex h-20 shrink-0 items-center border-b border-border px-6">
           <Link to="/admin" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive text-white shadow-sm">
-              <Shield className="h-5 w-5" />
-            </div>
+            <AgendaquiMark className="h-10 w-10 rounded-xl shadow-sm" />
 
             <div className="flex flex-col">
               <span className="font-display text-base font-bold tracking-tight text-foreground">

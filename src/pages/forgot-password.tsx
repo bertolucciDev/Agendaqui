@@ -8,6 +8,7 @@ import { resetPasswordSchema, type ResetPasswordFormData } from '@/lib/validatio
 import { notify } from '@/lib/notify'
 import { ArrowLeft, CheckCircle2, Key } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AgendaquiMark } from '@/components/shared/agendaqui-mark'
 import { Input } from '@/components/ui/input'
 
 /**
@@ -108,9 +109,7 @@ export default function ForgotPasswordPage() {
           </Link>
 
           <div className="mb-8 flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-              A
-            </div>
+            <AgendaquiMark className="h-8 w-8 rounded-lg" />
             <span className="text-lg font-bold tracking-tight text-foreground font-display">
               Agendaqui
             </span>
@@ -201,9 +200,7 @@ export default function ForgotPasswordPage() {
         </Link>
 
         <div className="mb-8 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-            A
-          </div>
+          <AgendaquiMark className="h-8 w-8 rounded-lg" />
           <span className="text-lg font-bold tracking-tight text-foreground font-display">
             Agendaqui
           </span>

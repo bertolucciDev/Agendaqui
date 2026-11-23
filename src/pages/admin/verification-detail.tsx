@@ -68,7 +68,13 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export default function AdminVerificationDetailPage() {
+export default function AdminVerificationDetailPage({
+  reviewPath = '/admin/verifications',
+  supportMode = false,
+}: {
+  reviewPath?: string
+  supportMode?: boolean
+}) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -87,7 +93,7 @@ export default function AdminVerificationDetailPage() {
   const businessQuery = useQuery({
     queryKey: ['admin', 'business-detail', data?.approvedBusinessId],
     queryFn: () => adminApi.getBusinessDetail(data!.approvedBusinessId!),
-    enabled: Boolean(data?.approvedBusinessId),
+    enabled: !supportMode && Boolean(data?.approvedBusinessId),
   })
 
   const handleOpenDocument = (doc: AdminVerificationDocument) => {
@@ -101,7 +107,7 @@ export default function AdminVerificationDetailPage() {
       const result = await adminApi.approveVerification(id)
       notify.success(`Negócio aprovado! ID: ${result.businessId}`)
       queryClient.invalidateQueries({ queryKey: ['admin'] })
-      navigate('/admin/verifications')
+      navigate(reviewPath)
     } catch (e: any) {
       notify.error(getApiErrorMessage(e, 'Erro ao aprovar'))
     } finally {
@@ -119,7 +125,7 @@ export default function AdminVerificationDetailPage() {
       })
       notify.success('Solicitação rejeitada.')
       queryClient.invalidateQueries({ queryKey: ['admin'] })
-      navigate('/admin/verifications')
+      navigate(reviewPath)
     } catch (e: any) {
       notify.error(getApiErrorMessage(e, 'Erro ao rejeitar'))
     } finally {
@@ -198,7 +204,7 @@ export default function AdminVerificationDetailPage() {
           <PageTitle>Verificação não encontrada</PageTitle>
         </PageHeader>
         <PageContent>
-          <Link to="/admin/verifications" className="btn btn-primary">
+          <Link to={reviewPath} className="btn btn-primary">
             Voltar
           </Link>
         </PageContent>
@@ -217,7 +223,7 @@ export default function AdminVerificationDetailPage() {
     <div>
       <PageHeader>
         <div className="flex items-center gap-3">
-          <Link to="/admin/verifications">
+          <Link to={reviewPath}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -353,7 +359,7 @@ export default function AdminVerificationDetailPage() {
                   </>
                 )}
 
-                {isApproved && data.approvedBusinessId && !businessQuery.isPending && !isBusinessBlocked && (
+                {!supportMode && isApproved && data.approvedBusinessId && !businessQuery.isPending && !isBusinessBlocked && (
                   <>
                     <Button
                       variant="destructive"
@@ -367,7 +373,7 @@ export default function AdminVerificationDetailPage() {
                   </>
                 )}
 
-                {(isDraft || isRejected) && canResend && (
+                {!supportMode && (isDraft || isRejected) && canResend && (
                   <Button
                     variant="outline"
                     className="w-full"
@@ -379,7 +385,7 @@ export default function AdminVerificationDetailPage() {
                   </Button>
                 )}
 
-                {isApproved && data.approvedBusinessId && isBusinessBlocked && (
+                {!supportMode && isApproved && data.approvedBusinessId && isBusinessBlocked && (
                   <Button
                     variant="outline"
                     className="w-full"
@@ -393,7 +399,7 @@ export default function AdminVerificationDetailPage() {
               </div>
             </Section>
 
-            {data.approvedBusinessId && (
+            {!supportMode && data.approvedBusinessId && (
               <Section title="Negócio Aprovado">
                 <Field label="Business ID" value={data.approvedBusinessId} />
                 <Field label="Status do negócio" value={businessQuery.data?.status ?? 'Carregando…'} />

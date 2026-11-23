@@ -98,6 +98,24 @@ function unwrapList<T>(
 }
 
 export const appointmentsApi = {
+  /** `GET /me/agenda` — compromissos próprios no negócio selecionado. */
+  listProfessionalAgenda: async (params: {
+    businessId: string
+    dateFrom: string
+    dateTo: string
+    limit?: number
+  }): Promise<Appointment[]> => {
+    const searchParams = new URLSearchParams({
+      businessId: params.businessId,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    })
+    if (params.limit) searchParams.set('limit', String(params.limit))
+
+    const { data } = await apiClient.get<RawAppointment[]>(`me/agenda?${searchParams.toString()}`)
+    return Array.isArray(data) ? data.map(toAppointment) : []
+  },
+
   /**
    * `POST /businesses/:businessId/appointments`
    *
