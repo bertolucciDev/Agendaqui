@@ -237,7 +237,7 @@ function QueueTicket({
         <div className="min-w-0 flex-1 basis-48">
           <p className="truncate text-sm font-semibold text-foreground">{ticket.subject}</p>
           <p className="mt-1 truncate text-xs text-muted-foreground">{ticket.requester.name} · {ticket.requester.email}</p>
-          {latest ? <p className="mt-1 truncate text-xs text-muted-foreground">{latest.sender.name}: {latest.body}</p> : null}
+          {latest ? <p className="mt-1 truncate text-xs text-muted-foreground">{latest.senderType === 'AI' ? 'Assistente Agendaqui' : latest.sender?.name ?? 'Participante'}: {latest.body}</p> : null}
         </div>
         <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{status}</span>
         <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">{category}</span>

@@ -40,10 +40,24 @@ export const SUPPORT_TICKET_PRIORITIES: { value: SupportTicketPriority; label: s
 export interface SupportMessage {
   id: string
   conversationId: string
-  senderUserId: string
+  senderUserId: string | null
+  senderType: 'USER' | 'AI'
   body: string
   createdAt: string
-  sender: { id: string; name: string }
+  sender: { id: string; name: string } | null
+}
+
+export interface SupportAiKnowledge {
+  id: string
+  question: string
+  answer: string | null
+  status: 'PENDING' | 'APPROVED' | 'DISMISSED'
+  occurrences: number
+  firstSeenAt: string
+  lastSeenAt: string
+  reviewedAt: string | null
+  reviewerUserId: string | null
+  reviewer: { id: string; name: string } | null
 }
 
 export interface SupportAgent {

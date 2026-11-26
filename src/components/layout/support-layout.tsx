@@ -1,4 +1,4 @@
-import { ClipboardCheck, LifeBuoy, LogOut, Settings, UsersRound } from 'lucide-react'
+import { ClipboardCheck, LifeBuoy, LogOut, Settings, Sparkles, UsersRound } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/app/providers/auth'
 import { ThemeSwitch } from '@/components/ui/theme-switch'
@@ -49,6 +49,18 @@ export default function SupportLayout() {
           >
             <UsersRound className="h-5 w-5" />
             <span className="sr-only sm:not-sr-only">Contas</span>
+          </NavLink>
+          <NavLink
+            to="/support/ai-knowledge"
+            className={({ isActive }) => cn(
+              'mt-2 flex items-center justify-center gap-3 rounded-xl px-2 py-3 text-sm font-medium sm:justify-start sm:px-4',
+              isActive
+                ? 'bg-primary-soft text-primary-soft-fg'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <Sparkles className="h-5 w-5" />
+            <span className="sr-only sm:not-sr-only">Conhecimento da IA</span>
           </NavLink>
           <NavLink
             to="/support/verifications"
