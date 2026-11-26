@@ -99,7 +99,10 @@ export function TicketConversation({
   const messagesQuery = useQuery({
     queryKey: messageKey,
     queryFn: () => supportApi.listMessages(ticketId, scope),
-    enabled: !!ticketId && ['IN_PROGRESS', 'RESOLVED', 'CLOSED'].includes(ticketQuery.data?.status ?? ''),
+    enabled: !!ticketId && (
+      ['IN_PROGRESS', 'RESOLVED', 'CLOSED'].includes(ticketQuery.data?.status ?? '') ||
+      (scope === 'help' && ticketQuery.data?.status === 'OPEN')
+    ),
   })
   const ticketStatus = ticketQuery.data?.status
 
@@ -250,7 +253,7 @@ export function TicketConversation({
   const ticket = ticketQuery.data
   const isCurrentAssignee = scope === 'support' && ticket.status === 'IN_PROGRESS' && ticket.assignedSupportUserId === user?.id
   const messages = messagesQuery.data ?? ticket.conversation?.messages ?? []
-  const canChat = ticket.status === 'IN_PROGRESS'
+  const canChat = ticket.status === 'IN_PROGRESS' || (scope === 'help' && ticket.status === 'OPEN')
   const ratingPrompt = messages.some((message) => message.body === RATING_PROMPT)
   const legacyRatingMessage = messages.find((message) => message.body.startsWith(RATING_PREFIX) && message.senderUserId === ticket.requesterUserId)
   const legacyRatingScore = legacyRatingMessage?.body.match(/^Nota do atendimento: ([1-5])\/5$/)?.[1]
@@ -391,7 +394,7 @@ export function TicketConversation({
             <>
               <div className="flex-1 space-y-3 overflow-y-auto p-4">
                 {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} mine={message.senderUserId === user?.id} />
+                  <MessageBubble key={message.id} message={message} mine={message.senderType === 'USER' && message.senderUserId === user?.id} />
                 ))}
               </div>
               <div className="flex flex-col items-center justify-center gap-3 border-t border-border p-8 text-center">
@@ -409,7 +412,7 @@ export function TicketConversation({
               <div className="flex-1 space-y-3 overflow-y-auto p-4">
                 {messagesQuery.isError ? <p role="alert" className="text-sm text-destructive">Não foi possível carregar as mensagens.</p> : null}
                 {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} mine={message.senderUserId === user?.id} />
+                  <MessageBubble key={message.id} message={message} mine={message.senderType === 'USER' && message.senderUserId === user?.id} />
                 ))}
                 <div ref={bottomRef} />
               </div>
@@ -421,6 +424,11 @@ export function TicketConversation({
                     </button>
                   ))}
                 </div>
+              ) : null}
+              {scope === 'help' && ticket.status === 'OPEN' ? (
+                <p className="border-t border-border px-3 pt-3 text-xs text-muted-foreground">
+                  Seu chamado está aguardando um atendente. Não envie senhas nem códigos de acesso.
+                </p>
               ) : null}
               {canChat ? <form onSubmit={submit} className="flex gap-2 border-t border-border p-3">
                 <Input aria-label="Mensagem" value={body} onChange={(event) => setBody(event.target.value)} maxLength={4000} placeholder="Escreva sua mensagem…" />
@@ -494,10 +502,11 @@ export function TicketConversation({
 }
 
 function MessageBubble({ message, mine }: { message: SupportMessage; mine: boolean }) {
+  const senderName = message.senderType === 'AI' ? 'Assistente Agendaqui' : message.sender?.name ?? 'Participante'
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <article className={`max-w-[85%] rounded-2xl px-4 py-3 ${mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
-        <p className="mb-1 text-[11px] font-semibold opacity-80">{mine ? 'Você' : message.sender.name}</p>
+      <article className={`max-w-[85%] rounded-2xl px-4 py-3 ${mine ? 'bg-primary text-primary-foreground' : message.senderType === 'AI' ? 'border border-primary/30 bg-primary/5 text-foreground' : 'bg-muted text-foreground'}`}>
+        <p className="mb-1 text-[11px] font-semibold opacity-80">{mine ? 'Você' : senderName}</p>
         <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>
         <time className="mt-2 block text-right text-[10px] opacity-70" dateTime={message.createdAt}>
           {new Date(message.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}

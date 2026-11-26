@@ -11,6 +11,7 @@ import type {
   SupportTicketStatus,
   SupportAgent,
   SupportTicketNote,
+  SupportAiKnowledge,
 } from '@/types/support'
 
 export interface CreateSupportTicketInput {
@@ -107,6 +108,21 @@ export const supportApi = {
   },
   sendMessage: async (ticketId: string, scope: 'help' | 'support', body: string): Promise<SupportMessage> => {
     const { data } = await apiClient.post<SupportMessage>(`${scope === 'help' ? 'help' : 'support'}/tickets/${ticketId}/messages`, { body })
+    return data
+  },
+  listAiKnowledgeQuestions: async (): Promise<SupportAiKnowledge[]> => {
+    const { data } = await apiClient.get<SupportAiKnowledge[]>('support/ai-knowledge')
+    return data
+  },
+  approveAiKnowledgeQuestion: async (
+    id: string,
+    input: { question: string; answer: string },
+  ): Promise<SupportAiKnowledge> => {
+    const { data } = await apiClient.patch<SupportAiKnowledge>(`support/ai-knowledge/${id}/approve`, input)
+    return data
+  },
+  dismissAiKnowledgeQuestion: async (id: string): Promise<SupportAiKnowledge> => {
+    const { data } = await apiClient.patch<SupportAiKnowledge>(`support/ai-knowledge/${id}/dismiss`)
     return data
   },
 }

@@ -9,7 +9,7 @@ interface TicketConversationDialogProps {
   children: ReactNode
 }
 
-const FOCUSABLE_SELECTOR = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
 
 export function TicketConversationDialog({ title, onClose, size = 'wide', children }: TicketConversationDialogProps) {
   const titleId = useId()
@@ -31,6 +31,8 @@ export function TicketConversationDialog({ title, onClose, size = 'wide', childr
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
       event.preventDefault()
+      event.stopPropagation()
+      onClose()
       return
     }
     if (event.key !== 'Tab') return

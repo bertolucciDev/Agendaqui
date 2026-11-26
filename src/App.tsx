@@ -41,6 +41,7 @@ const AdminCategoriesPage = lazy(() => import('@/pages/admin/categories'))
 const AdminConfigPage = lazy(() => import('@/pages/admin/config'))
 const AdminPrivacyRequestsPage = lazy(() => import('@/pages/admin/privacy-requests'))
 const SupportDashboardPage = lazy(() => import('@/pages/support/dashboard'))
+const SupportAiKnowledgePage = lazy(() => import('@/pages/support/ai-knowledge'))
 const SupportAccountsPage = lazy(() => import('@/pages/support/accounts'))
 const SupportTicketPage = lazy(() => import('@/pages/support/ticket'))
 const HelpPage = lazy(() => import('@/pages/help'))
@@ -163,6 +164,7 @@ export default function App() {
           <Route element={<ProtectedRoute><SupportGuard /></ProtectedRoute>}>
             <Route element={<SupportLayout />}>
               <Route path="/support" element={<SupportDashboardPage />} />
+              <Route path="/support/ai-knowledge" element={<SupportAiKnowledgePage />} />
               <Route path="/support/accounts" element={<SupportAccountsPage />} />
               <Route
                 path="/support/verifications"
