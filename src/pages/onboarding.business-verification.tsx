@@ -52,14 +52,11 @@ const STATUS_VIEW: Record<string, { title: string; body: string; tone: string }>
 }
 
 /**
- * Caminho de ação por estado (paridade com o backend):
- * - REJECTED: edição direta não existe — a write-path (`findOpenByOwner`) só
- *   aceita DRAFT/PENDING, e a reabertura é via `request-resend` da plataforma,
- *   que devolve a solicitação para DRAFT. Sem CTA aqui;
- * - EXPIRED/CANCELLED: encerradas — o onboarding abre uma NOVA verificação.
+ * Solicitações encerradas podem abrir um novo rascunho; solicitações pendentes
+ * continuam somente para acompanhamento.
  */
 function canReopen(data: { status: BusinessVerification['status'] }): boolean {
-  return data.status === 'EXPIRED' || data.status === 'CANCELLED'
+  return data.status === 'REJECTED' || data.status === 'EXPIRED' || data.status === 'CANCELLED'
 }
 
 function DashboardBackLink({ visible }: { visible: boolean }) {
@@ -191,8 +188,10 @@ export default function OnboardingBusinessVerificationPage() {
           ) : null}
 
           {canReopen(data) ? (
-            <Link to="/onboarding/business">
-              <Button variant="outline">Abrir nova verificação</Button>
+            <Link to={status === 'REJECTED' ? '/onboarding/business/new' : '/onboarding/business'}>
+              <Button variant="outline">
+                {status === 'REJECTED' ? 'Tentar novamente' : 'Abrir nova verificação'}
+              </Button>
             </Link>
           ) : null}
 
